@@ -69,6 +69,9 @@ class TemperatureAlert:
                 self.last_temp_time = state.get('last_temp_time')
                 if self.last_temp_time:
                     self.last_temp_time = datetime.fromisoformat(self.last_temp_time)
+                # Restore cooldown state
+                last_alert_data = state.get('last_alert_time', {})
+                self.last_alert_time = {k: datetime.fromisoformat(v) for k, v in last_alert_data.items()}
                 logger.info("Loaded previous state")
             except Exception as e:
                 logger.warning(f"Could not load state: {e}")
@@ -315,8 +318,13 @@ class TemperatureAlert:
         
         try:
             # Extract threshold value based on severity
+            # Map severity name to config key ('rapid_change' -> 'rate_of_change')
+            severity_to_config_key = {
+                'rapid_change': 'rate_of_change'
+            }
             thresholds = self.config.get('thresholds', {})
-            threshold_value = thresholds.get(severity, None)
+            config_key = severity_to_config_key.get(severity, severity)
+            threshold_value = thresholds.get(config_key, None)
             
             payload = {
                 'event': 'temperature_alert',
