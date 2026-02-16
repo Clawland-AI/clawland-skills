@@ -1,0 +1,85 @@
+# Temperature Alert Skill - Configuration Example
+# Copy this file to config.yaml and customize for your environment
+
+# Sensor configuration
+sensor: "sht40"              # Sensor type: sht40, dht22, bme280, dallas, max6675
+sensor_pin: "I2C:0x44"       # GPIO pin or I2C address ("auto" for auto-detection)
+
+# Temperature thresholds (in Celsius)
+thresholds:
+  high_warning: 28.0         # Send warning alert when temperature exceeds this
+  high_critical: 35.0        # Send critical alert when temperature exceeds this
+  low_warning: 5.0           # Send warning alert when temperature falls below this
+  low_critical: 0.0          # Send critical alert when temperature falls below this
+  rate_of_change: 5.0        # Alert if temperature changes faster than this (°C per minute)
+
+# Notification channels
+notifications:
+  # Telegram Bot
+  telegram:
+    enabled: false           # Set to true to enable Telegram alerts
+    bot_token: ""            # Get from @BotFather on Telegram
+    chat_id: ""              # Get from @userinfobot
+  
+  # Discord Webhook
+  discord:
+    enabled: false           # Set to true to enable Discord alerts
+    webhook_url: ""          # Create webhook in Discord Server Settings → Integrations
+  
+  # Custom Webhook (for integration with other services)
+  webhook:
+    enabled: false           # Set to true to enable custom webhook
+    url: ""                  # Your webhook endpoint URL
+    headers:                 # Optional HTTP headers
+      # Authorization: "Bearer YOUR_API_TOKEN"
+      # Content-Type: "application/json"
+  
+  # Alert cooldown (seconds)
+  cooldown: 300              # Minimum time between duplicate alerts (5 minutes)
+
+# --- Example Configurations ---
+
+# Example 1: Server Room Monitoring
+# sensor: "sht40"
+# sensor_pin: "I2C:0x44"
+# thresholds:
+#   high_warning: 28.0
+#   high_critical: 35.0
+# notifications:
+#   telegram:
+#     enabled: true
+#     bot_token: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+#     chat_id: "987654321"
+
+# Example 2: Greenhouse Freeze Protection
+# sensor: "dht22"
+# sensor_pin: "GPIO4"
+# thresholds:
+#   low_warning: 8.0
+#   low_critical: 2.0
+# notifications:
+#   discord:
+#     enabled: true
+#     webhook_url: "https://discord.com/api/webhooks/123456789/abcdefg"
+
+# Example 3: Industrial Equipment with Multi-Channel Alerts
+# sensor: "bme280"
+# sensor_pin: "I2C:0x76"
+# thresholds:
+#   high_warning: 30.0
+#   high_critical: 40.0
+#   rate_of_change: 3.0
+# notifications:
+#   telegram:
+#     enabled: true
+#     bot_token: "${TELEGRAM_BOT_TOKEN}"
+#     chat_id: "${TELEGRAM_CHAT_ID}"
+#   discord:
+#     enabled: true
+#     webhook_url: "${DISCORD_WEBHOOK}"
+#   webhook:
+#     enabled: true
+#     url: "https://api.example.com/alerts"
+#     headers:
+#       Authorization: "Bearer ${API_TOKEN}"
+#   cooldown: 600
