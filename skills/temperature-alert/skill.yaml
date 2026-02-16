@@ -1,0 +1,16 @@
+name: temperature-alert
+version: 1.0.0
+description: A temperature threshold alert skill for Claw agents.
+author: slah225682-coder
+triggers:
+  - type: timer
+    interval: 5m
+  - type: webhook
+    path: /temp-update
+actions:
+  - name: check-temperature
+    handler: handler.py
+    input:
+      threshold_high: 80.0
+      threshold_low: 10.0
+      channels: ["telegram", "discord"]
