@@ -314,11 +314,15 @@ class TemperatureAlert:
             return False
         
         try:
+            # Extract threshold value based on severity
+            thresholds = self.config.get('thresholds', {})
+            threshold_value = thresholds.get(severity, None)
+            
             payload = {
                 'event': 'temperature_alert',
                 'severity': severity,
                 'temperature': temp,
-                'threshold': self.config.get('thresholds', {}).get(f'{severity}', None),
+                'threshold': threshold_value,
                 'sensor': self.config.get('sensor', 'unknown'),
                 'timestamp': datetime.now().isoformat(),
                 'message': message

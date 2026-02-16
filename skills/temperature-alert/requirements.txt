@@ -1,0 +1,13 @@
+# Core dependencies for Temperature Alert Skill
+pyyaml>=6.0
+requests>=2.31.0
+
+# Optional: Install sensor-specific libraries based on your hardware
+# For SHT40: adafruit-circuitpython-sht4x
+# For DHT22: Adafruit-DHT
+# For BME280: adafruit-circuitpython-bme280
+# For Dallas DS18B20: w1thermsensor
+
+# Testing dependencies
+pytest>=7.4.0
+pytest-cov>=4.1.0

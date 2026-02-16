@@ -23,22 +23,52 @@ The Temperature Alert skill monitors temperature sensors and sends notifications
 
 ## Installation
 
-### On PicClaw (Edge Device)
+### 1. Install Python Dependencies
+
+First, install the required packages:
+
+```bash
+pip3 install -r requirements.txt
+```
+
+### 2. Install Sensor-Specific Libraries (Optional)
+
+Based on your hardware, install the appropriate sensor library:
+
+```bash
+# For SHT40 sensor
+pip3 install adafruit-circuitpython-sht4x
+
+# For DHT22 sensor
+pip3 install Adafruit-DHT
+
+# For BME280 sensor
+pip3 install adafruit-circuitpython-bme280
+
+# For Dallas DS18B20 sensor
+pip3 install w1thermsensor
+```
+
+> **Note:** The core skill provides a plugin architecture. Sensor reading functions (`_read_sht40`, `_read_dht22`, etc.) are template methods that need sensor-specific library implementations. See the **Sensor Integration** section below for details.
+
+### 3. Install on Claw Agent
+
+#### On PicClaw (Edge Device)
 ```bash
 picclaw skill install temperature-alert
 ```
 
-### On NanoClaw (Lightweight Edge)
+#### On NanoClaw (Lightweight Edge)
 ```bash
 nanoclaw skill install temperature-alert
 ```
 
-### On MicroClaw (Industrial)
+#### On MicroClaw (Industrial)
 ```bash
 microclaw skill install temperature-alert
 ```
 
-### Remote Install via MoltClaw (Cloud Orchestration)
+#### Remote Install via MoltClaw (Cloud Orchestration)
 ```bash
 moltclaw fleet skill install --node edge-01 temperature-alert
 ```
