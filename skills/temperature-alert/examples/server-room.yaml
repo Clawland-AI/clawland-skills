@@ -1,0 +1,267 @@
+# Server Room Temperature Monitoring Configuration
+# Critical infrastructure monitoring with rapid alerting
+
+name: server-room-monitor
+version: 1.0.0
+description: "Critical server room temperature monitoring"
+
+# Server room specific thresholds (tighter tolerances)
+config:
+  high_threshold: 26.0      # Servers start throttling around 28°C
+  low_threshold: 16.0       # Condensation risk below 15°C
+  rate_threshold: 2.0       # Rapid changes indicate HVAC failure
+  cooldown_minutes: 3       # Fast response for critical systems
+  sensor_id: "server_rack_01"
+  sensor_type: "DS18B20"    # Reliable digital sensor
+
+# Enterprise-grade notification channels
+notifications:
+  # Primary: IT team Discord channel
+  discord:
+    enabled: true
+    webhook_url: "${DISCORD_IT_ALERTS_WEBHOOK}"
+  
+  # Secondary: Email to IT staff
+  email:
+    enabled: true
+    smtp_server: "smtp.company.com"
+    smtp_port: 587
+    username: "${IT_SMTP_USER}"
+    password: "${IT_SMTP_PASSWORD}"
+    from_email: "monitoring@company.com"
+    to_email: "it-alerts@company.com"
+  
+  # Tertiary: Integration with existing monitoring
+  webhook:
+    enabled: true
+    url: "https://monitoring.company.com/api/v1/alerts"
+    method: "POST"
+    headers:
+      Authorization: "Bearer ${MONITORING_API_TOKEN}"
+      Content-Type: "application/json"
+      X-Alert-Source: "temperature-sensor"
+  
+  # Emergency: SMS via Twilio for critical alerts
+  webhook_sms:
+    enabled: true
+    url: "https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json"
+    method: "POST"
+    headers:
+      Authorization: "Basic ${TWILIO_AUTH_B64}"
+      Content-Type: "application/x-www-form-urlencoded"
+
+# Frequent monitoring for critical infrastructure
+triggers:
+  - type: cron
+    schedule: "*/1 * * * *"  # Every minute monitoring
+    description: "Continuous server room monitoring"
+  - type: event
+    event: "sensor.temperature"
+    description: "Real-time temperature events"
+  - type: threshold
+    condition: "temperature > 24.0"  # Early warning threshold
+    description: "Pre-alert at 24°C"
+
+# Server room specific alert actions
+actions:
+  on_high_temperature:
+    description: "Critical server room overheating response"
+    steps:
+      - log: "🚨 CRITICAL: Server room temperature {temperature}°C exceeds {high_threshold}°C"
+      - notify_all_channels:
+          title: "🔥 SERVER ROOM OVERHEATING"
+          message: |
+            🚨 CRITICAL TEMPERATURE ALERT 🚨
+            
+            Location: Main Server Room (Rack 1)
+            Current Temperature: {temperature}°C
+            Critical Threshold: {high_threshold}°C
+            Rate of Change: {temperature_rate}°C/min
+            Time: {timestamp}
+            
+            ⚠️ IMMEDIATE ACTION REQUIRED ⚠️
+            
+            Potential Server Damage Risk:
+            • Servers may throttle performance
+            • Hardware lifespan reduction
+            • Possible thermal shutdown
+            
+            Action Items:
+            1. Check HVAC system status
+            2. Verify air conditioning operation
+            3. Check for blocked air vents
+            4. Consider emergency server shutdown
+            5. Contact facilities management
+            
+            Severity: CRITICAL
+            Alert ID: {alert_id}
+          priority: "critical"
+      - send_sms:
+          message: "URGENT: Server room {temperature}°C! Check HVAC immediately. Call facilities: x1234"
+          to: "+1234567890"
+      - store_event:
+          type: "server_room_critical_temp"
+          temperature: "{temperature}"
+          threshold: "{high_threshold}"
+          rack_id: "rack_01"
+          
+  on_low_temperature:
+    description: "Server room under-cooling response"
+    steps:
+      - log: "❄️ WARNING: Server room temperature {temperature}°C below {low_threshold}°C"
+      - notify_all_channels:
+          title: "🧊 SERVER ROOM OVERCOOLING"
+          message: |
+            ⚠️ LOW TEMPERATURE WARNING ⚠️
+            
+            Location: Main Server Room (Rack 1)
+            Current Temperature: {temperature}°C
+            Low Threshold: {low_threshold}°C
+            Time: {timestamp}
+            
+            Potential Issues:
+            • Condensation risk
+            • Energy waste
+            • HVAC system malfunction
+            
+            Action Items:
+            1. Check HVAC temperature setpoint
+            2. Verify cooling system operation
+            3. Look for condensation signs
+            4. Adjust thermostat if needed
+            
+            Severity: WARNING
+          priority: "high"
+          
+  on_rapid_change:
+    description: "Rapid temperature change in server room"
+    steps:
+      - log: "⚡ ALERT: Rapid temperature change {rate}°C/min in server room"
+      - notify_all_channels:
+          title: "⚡ HVAC SYSTEM ALERT"
+          message: |
+            ⚠️ RAPID TEMPERATURE CHANGE ⚠️
+            
+            Location: Main Server Room
+            Temperature Change: {rate}°C/min
+            Change Threshold: {rate_threshold}°C/min
+            Current Temperature: {temperature}°C
+            Time: {timestamp}
+            
+            Likely Causes:
+            • HVAC system failure/cycling
+            • Cooling unit malfunction
+            • Power outage to cooling
+            • Airflow blockage
+            
+            Immediate Actions:
+            1. Check HVAC system status
+            2. Verify power to cooling units
+            3. Check for error codes on HVAC
+            4. Inspect air vents for blockage
+            
+            Severity: HIGH
+          priority: "high"
+
+# Server room environmental tracking
+state:
+  rack_location:
+    type: string
+    description: "Physical rack location"
+    default: "Rack 01, Row A"
+  
+  hvac_status:
+    type: string
+    description: "HVAC system status"
+    default: "unknown"
+  
+  server_count:
+    type: integer
+    description: "Number of active servers"
+    default: 12
+  
+  power_consumption:
+    type: float
+    description: "Total rack power consumption (kW)"
+    default: 8.5
+
+# Enterprise monitoring requirements
+requirements:
+  hardware:
+    - description: "DS18B20 digital temperature sensor"
+      required: true
+      part_number: "DS18B20"
+    - description: "Shielded cable for EMI protection"
+      required: true
+    - description: "Sensor mounting near server intake"
+      required: true
+  
+  network:
+    - description: "Reliable network connectivity"
+      required: true
+    - description: "Firewall rules for monitoring endpoints"
+      required: true
+  
+  permissions:
+    - description: "SNMP access to HVAC system (if available)"
+      required: false
+
+# Business hours vs after-hours configuration
+schedule_configs:
+  business_hours:  # 8 AM - 6 PM weekdays
+    cooldown_minutes: 5     # Faster response during work hours
+    high_threshold: 25.0    # Tighter control when staff present
+    
+  after_hours:     # Nights and weekends  
+    cooldown_minutes: 3     # Even faster when no one on-site
+    high_threshold: 26.0    # Slightly higher tolerance
+    sms_alerts: true        # SMS notifications after hours
+
+# Integration with existing infrastructure
+integrations:
+  network_monitoring:
+    description: "Send alerts to existing network monitoring"
+    webhook_url: "${NETWORK_MONITORING_WEBHOOK}"
+    format: "snmp_trap"
+  
+  ticketing_system:
+    description: "Auto-create tickets for temperature alerts"
+    webhook_url: "https://helpdesk.company.com/api/tickets"
+    auth_header: "Bearer ${HELPDESK_API_TOKEN}"
+  
+  hvac_control:
+    description: "Integration with smart HVAC system"
+    webhook_url: "http://hvac-controller.local/api/alerts"
+    
+  ups_monitoring:
+    description: "Coordinate with UPS monitoring"
+    webhook_url: "http://ups-monitor.local/api/environmental"
+
+# Escalation procedures
+escalation:
+  level_1:  # 26°C
+    notify: ["discord", "email"]
+    severity: "warning"
+    
+  level_2:  # 28°C  
+    notify: ["discord", "email", "webhook"]
+    severity: "critical"
+    
+  level_3:  # 30°C
+    notify: ["discord", "email", "webhook", "sms"]
+    severity: "emergency"
+    actions: ["shutdown_non_critical_servers"]
+
+# Compliance and documentation
+compliance:
+  iso27001:
+    description: "Temperature monitoring for ISO 27001 compliance"
+    logging_required: true
+    
+  soc2:
+    description: "Environmental controls for SOC 2"
+    audit_trail: true
+    
+  uptime_sla:
+    description: "99.9% uptime SLA protection"
+    max_downtime_minutes: 43  # Monthly allowance
