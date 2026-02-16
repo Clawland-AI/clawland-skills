@@ -1,0 +1,189 @@
+name: temperature-alert
+version: 1.0.0
+description: Monitor temperature thresholds and send alerts via multiple channels
+author: Clawland Community
+license: MIT
+agent: any  # Works with picclaw, nanoclaw, microclaw, moltclaw
+
+# Trigger conditions
+triggers:
+  - cron: "*/5 * * * *"           # Check every 5 minutes
+  - event: "sensor.temperature"   # React to temperature reading events
+  - command: "check-temp"         # Manual trigger via agent command
+
+# Required tools/capabilities
+tools:
+  - read_sensor    # Read temperature from sensor
+  - send_message   # Send notifications
+  - log_data       # Log temperature history
+
+# Configuration schema
+config:
+  sensor:
+    type: string
+    description: "Sensor type (sht40, dht22, bme280, dallas, etc.)"
+    required: true
+  
+  sensor_pin:
+    type: string
+    description: "GPIO pin or I2C address"
+    default: "auto"
+  
+  thresholds:
+    high_warning:
+      type: number
+      description: "High temperature warning threshold (°C)"
+      default: 35.0
+    
+    high_critical:
+      type: number
+      description: "High temperature critical threshold (°C)"
+      default: 45.0
+    
+    low_warning:
+      type: number
+      description: "Low temperature warning threshold (°C)"
+      default: 5.0
+    
+    low_critical:
+      type: number
+      description: "Low temperature critical threshold (°C)"
+      default: 0.0
+    
+    rate_of_change:
+      type: number
+      description: "Alert if temperature changes faster than this (°C/min)"
+      default: 5.0
+  
+  notifications:
+    telegram:
+      enabled:
+        type: boolean
+        default: false
+      bot_token:
+        type: string
+        sensitive: true
+      chat_id:
+        type: string
+    
+    discord:
+      enabled:
+        type: boolean
+        default: false
+      webhook_url:
+        type: string
+        sensitive: true
+    
+    webhook:
+      enabled:
+        type: boolean
+        default: false
+      url:
+        type: string
+      headers:
+        type: object
+        default: {}
+    
+    cooldown:
+      type: number
+      description: "Minimum seconds between duplicate alerts"
+      default: 300
+
+# Alert actions by severity level
+actions:
+  on_high_warning:
+    - log: "Temperature high: {temp}°C (threshold: {threshold}°C)"
+    - notify: "⚠️ Temperature Warning: {temp}°C"
+  
+  on_high_critical:
+    - log: "CRITICAL: Temperature dangerously high: {temp}°C"
+    - notify: "🚨 CRITICAL: Temperature {temp}°C! Take immediate action!"
+    - escalate: true  # Escalate to cloud/MoltClaw if available
+  
+  on_low_warning:
+    - log: "Temperature low: {temp}°C (threshold: {threshold}°C)"
+    - notify: "❄️ Low Temperature Warning: {temp}°C"
+  
+  on_low_critical:
+    - log: "CRITICAL: Temperature dangerously low: {temp}°C"
+    - notify: "🥶 CRITICAL: Freezing temperature {temp}°C!"
+    - escalate: true
+  
+  on_rapid_change:
+    - log: "Rapid temperature change detected: {rate}°C/min"
+    - notify: "⚡ Rapid temperature change: {rate}°C/min"
+  
+  on_normal:
+    - log: "Temperature normal: {temp}°C"
+
+# Deployment targets
+compatible_agents:
+  - picclaw     # Edge device with sensors
+  - nanoclaw    # Lightweight monitoring
+  - microclaw   # Industrial monitoring
+  - moltclaw    # Cloud orchestration
+
+# Dependencies
+dependencies:
+  python: ">=3.9"
+  packages:
+    - requests    # For webhook notifications
+    - pyyaml      # Config parsing
+
+# Example usage
+examples:
+  - name: "Basic temperature monitoring"
+    description: "Alert on high temperature in server room"
+    config:
+      sensor: "sht40"
+      sensor_pin: "I2C:0x44"
+      thresholds:
+        high_warning: 28.0
+        high_critical: 35.0
+      notifications:
+        telegram:
+          enabled: true
+          bot_token: "${TELEGRAM_BOT_TOKEN}"
+          chat_id: "${TELEGRAM_CHAT_ID}"
+  
+  - name: "Greenhouse freeze protection"
+    description: "Alert on low temperature in greenhouse"
+    config:
+      sensor: "dht22"
+      sensor_pin: "GPIO4"
+      thresholds:
+        low_warning: 8.0
+        low_critical: 2.0
+      notifications:
+        discord:
+          enabled: true
+          webhook_url: "${DISCORD_WEBHOOK}"
+  
+  - name: "Multi-channel datacenter monitoring"
+    description: "Monitor server room with multiple alert channels"
+    config:
+      sensor: "bme280"
+      thresholds:
+        high_warning: 30.0
+        high_critical: 40.0
+        rate_of_change: 3.0
+      notifications:
+        telegram:
+          enabled: true
+        discord:
+          enabled: true
+        webhook:
+          enabled: true
+          url: "https://api.example.com/alerts"
+          headers:
+            Authorization: "Bearer ${API_TOKEN}"
+
+# Metadata
+tags:
+  - monitoring
+  - temperature
+  - alerts
+  - iot
+  - sensors
+
+category: Monitoring
