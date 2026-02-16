@@ -3,16 +3,15 @@ import json
 
 def notify(message, channels):
     print(f"Sending notification to {channels}: {message}")
-    # In a real Claw agent, this would call the 'message' tool or internal APIs.
-    # For this template, we log the action.
 
 def handle(event, context):
-    config = context.get('config', {})
-    threshold_high = config.get('threshold_high', 80.0)
-    threshold_low = config.get('threshold_low', 10.0)
-    channels = config.get('channels', ['telegram'])
+    # Cursor Bugbot was right! Fix: Read from actions[].input mapped to event/context
+    # Aligning with Clawland standard: inputs are merged into the event object
+    threshold_high = event.get('threshold_high', 80.0)
+    threshold_low = event.get('threshold_low', 10.0)
+    channels = event.get('channels', ['telegram'])
 
-    # Mock sensor data extraction
+    # Current temperature from sensor
     current_temp = event.get('temperature', 25.0)
 
     if current_temp > threshold_high:
@@ -23,7 +22,10 @@ def handle(event, context):
         print(f"Temperature OK: {current_temp}°C")
 
 if __name__ == "__main__":
-    # Test execution
-    test_event = {"temperature": 85.0}
-    test_context = {"config": {"threshold_high": 80.0, "channels": ["discord"]}}
-    handle(test_event, test_context)
+    # Test execution with fixed input mapping
+    test_event = {
+        "temperature": 85.0,
+        "threshold_high": 80.0,
+        "channels": ["discord"]
+    }
+    handle(test_event, {})
