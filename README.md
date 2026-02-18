@@ -1,6 +1,6 @@
 # Clawland Skills
 
-**Community skill marketplace — plug-and-play AI capabilities for all Claw family agents.**
+**Community skill marketplace — plug-and-play capabilities for automation and monitoring.**
 
 > Part of the [Clawland](https://github.com/Clawland-AI) ecosystem.
 
@@ -8,11 +8,11 @@
 
 ## Overview
 
-Clawland Skills is a curated collection of **plug-and-play capabilities** that any Claw agent can load on demand. Skills encapsulate domain knowledge, tool configurations, and behavioral patterns into reusable packages.
+Clawland Skills is a curated collection of **plug-and-play capabilities** that any automation system can load on demand. Skills encapsulate domain knowledge, tool configurations, and behavioral patterns into reusable packages.
 
 ## What is a Skill?
 
-A skill is a YAML configuration + optional supporting files that teach a Claw agent how to handle a specific domain:
+A skill is a YAML configuration + optional supporting files that teach a automation system how to handle a specific domain:
 
 ```yaml
 # skills/temperature-monitor/skill.yaml
