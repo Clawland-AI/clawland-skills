@@ -1,0 +1,315 @@
+name: temperature-alert
+version: 1.0.0
+description: Temperature threshold alert that works with any Claw agent
+author: James Pirstin
+license: MIT
+tags:
+  - monitoring
+  - sensors
+  - alerts
+  - temperature
+
+# Compatible with all Claw family agents
+compatibility:
+  - picclaw
+  - nanoclaw
+  - microclaw
+  - moltclaw
+
+# Trigger conditions
+triggers:
+  - type: cron
+    schedule: "*/2 * * * *"  # Check every 2 minutes
+    description: "Periodic temperature monitoring"
+  - type: event
+    event: "sensor.temperature"
+    description: "React to temperature sensor events"
+  - type: threshold
+    condition: "temperature > config.high_threshold"
+    description: "High temperature threshold breach"
+  - type: threshold
+    condition: "temperature < config.low_threshold" 
+    description: "Low temperature threshold breach"
+
+# Configuration parameters
+config:
+  # Temperature thresholds (Celsius)
+  high_threshold:
+    type: float
+    default: 35.0
+    description: "High temperature alert threshold in Celsius"
+    min: -50
+    max: 100
+  
+  low_threshold:
+    type: float
+    default: 5.0
+    description: "Low temperature alert threshold in Celsius"
+    min: -50
+    max: 100
+  
+  # Rate of change monitoring
+  rate_threshold:
+    type: float
+    default: 5.0
+    description: "Maximum temperature change per minute (°C/min)"
+    min: 0.1
+    max: 50.0
+  
+  # Alert cooldown to prevent spam
+  cooldown_minutes:
+    type: integer
+    default: 15
+    description: "Minutes between repeated alerts for same condition"
+    min: 1
+    max: 1440
+  
+  # Sensor configuration
+  sensor_id:
+    type: string
+    default: "temp_01"
+    description: "Temperature sensor identifier"
+    required: true
+  
+  sensor_type:
+    type: string
+    default: "DS18B20"
+    description: "Temperature sensor type/driver"
+    options: ["DS18B20", "DHT22", "BME280", "LM35", "TMP36", "SHT30"]
+
+# Notification channels
+notifications:
+  telegram:
+    enabled:
+      type: boolean
+      default: false
+      description: "Enable Telegram notifications"
+    bot_token:
+      type: string
+      description: "Telegram bot token"
+      secret: true
+    chat_id:
+      type: string
+      description: "Telegram chat ID for alerts"
+    
+  discord:
+    enabled:
+      type: boolean
+      default: false
+      description: "Enable Discord notifications"
+    webhook_url:
+      type: string
+      description: "Discord webhook URL"
+      secret: true
+  
+  email:
+    enabled:
+      type: boolean
+      default: true
+      description: "Enable email notifications"
+    smtp_server:
+      type: string
+      default: "smtp.gmail.com"
+      description: "SMTP server hostname"
+    smtp_port:
+      type: integer
+      default: 587
+      description: "SMTP server port"
+    username:
+      type: string
+      description: "SMTP username"
+    password:
+      type: string
+      description: "SMTP password"
+      secret: true
+    from_email:
+      type: string
+      description: "Sender email address"
+    to_email:
+      type: string
+      description: "Recipient email address"
+      required: true
+  
+  webhook:
+    enabled:
+      type: boolean
+      default: false
+      description: "Enable generic webhook notifications"
+    url:
+      type: string
+      description: "Webhook URL"
+    headers:
+      type: object
+      description: "Additional HTTP headers"
+      default: {}
+    method:
+      type: string
+      default: "POST"
+      description: "HTTP method"
+      options: ["POST", "PUT"]
+
+# Required tools/capabilities
+tools:
+  - name: temperature_sensor
+    description: "Read temperature from sensor"
+    type: sensor
+  - name: http_request
+    description: "Send HTTP requests for webhooks/APIs"
+    type: network
+  - name: smtp_client
+    description: "Send email notifications"
+    type: communication
+  - name: file_storage
+    description: "Store alert history and state"
+    type: storage
+
+# Actions to perform
+actions:
+  on_high_temperature:
+    description: "Actions when temperature exceeds high threshold"
+    steps:
+      - log: "High temperature alert: {temperature}°C > {high_threshold}°C"
+      - notify_all_channels:
+          title: "🔥 High Temperature Alert"
+          message: "Temperature {temperature}°C exceeds threshold {high_threshold}°C on sensor {sensor_id}"
+          priority: "high"
+      - store_event:
+          type: "high_temp_alert"
+          temperature: "{temperature}"
+          threshold: "{high_threshold}"
+          sensor: "{sensor_id}"
+  
+  on_low_temperature:
+    description: "Actions when temperature drops below low threshold"
+    steps:
+      - log: "Low temperature alert: {temperature}°C < {low_threshold}°C"
+      - notify_all_channels:
+          title: "🧊 Low Temperature Alert"
+          message: "Temperature {temperature}°C below threshold {low_threshold}°C on sensor {sensor_id}"
+          priority: "medium"
+      - store_event:
+          type: "low_temp_alert"
+          temperature: "{temperature}"
+          threshold: "{low_threshold}"
+          sensor: "{sensor_id}"
+  
+  on_rapid_change:
+    description: "Actions when temperature changes rapidly"
+    steps:
+      - log: "Rapid temperature change: {rate}°C/min"
+      - notify_all_channels:
+          title: "⚡ Rapid Temperature Change"
+          message: "Temperature changing at {rate}°C/min (threshold: {rate_threshold}°C/min)"
+          priority: "medium"
+  
+  on_sensor_error:
+    description: "Actions when sensor reading fails"
+    steps:
+      - log: "Temperature sensor error: {error}"
+      - notify_all_channels:
+          title: "⚠️ Sensor Error"
+          message: "Temperature sensor {sensor_id} error: {error}"
+          priority: "high"
+
+# State management
+state:
+  last_temperature:
+    type: float
+    description: "Last recorded temperature"
+  last_alert_time:
+    type: timestamp
+    description: "Time of last alert"
+  alert_count:
+    type: integer
+    description: "Number of alerts sent in current session"
+    default: 0
+  sensor_status:
+    type: string
+    description: "Current sensor status"
+    default: "unknown"
+    options: ["ok", "error", "offline", "unknown"]
+  temperature_history:
+    type: array
+    description: "Recent temperature readings for trend analysis"
+    max_length: 100
+
+# Installation requirements
+requirements:
+  system_packages:
+    - python3-pip
+    - python3-dev
+  
+  python_packages:
+    - requests>=2.28.0
+    # smtplib, json, datetime are Python stdlib — no pip install needed
+  
+  hardware:
+    - description: "Temperature sensor (DS18B20, DHT22, BME280, etc.)"
+      required: true
+    - description: "GPIO pins for sensor connection"
+      required: true
+  
+  permissions:
+    - gpio_access
+    - network_access
+    - file_write
+
+# Example configurations
+examples:
+  greenhouse_monitoring:
+    description: "Monitor greenhouse temperature"
+    config:
+      high_threshold: 32.0
+      low_threshold: 10.0
+      rate_threshold: 3.0
+      sensor_id: "greenhouse_temp"
+    notifications:
+      telegram:
+        enabled: true
+        bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+  
+  server_room:
+    description: "Monitor server room temperature"
+    config:
+      high_threshold: 28.0
+      low_threshold: 18.0
+      rate_threshold: 2.0
+      cooldown_minutes: 5
+      sensor_id: "server_room_01"
+    notifications:
+      discord:
+        enabled: true
+        webhook_url: "${DISCORD_WEBHOOK}"
+      email:
+        enabled: true
+        to_email: "admin@example.com"
+  
+  freezer_monitor:
+    description: "Monitor freezer temperature"
+    config:
+      high_threshold: -10.0
+      low_threshold: -25.0
+      rate_threshold: 1.0
+      sensor_id: "freezer_temp"
+    notifications:
+      webhook:
+        enabled: true
+        url: "https://api.example.com/alerts"
+        headers:
+          Authorization: "Bearer ${API_TOKEN}"
+
+# Documentation
+docs:
+  setup_guide: "./docs/SETUP.md"
+  troubleshooting: "./docs/TROUBLESHOOTING.md"
+  api_reference: "./docs/API.md"
+
+# Metadata
+metadata:
+  category: "monitoring"
+  complexity: "beginner"
+  estimated_setup_time: "15 minutes"
+  power_consumption: "low"
+  reliability: "high"
+  last_updated: "2026-02-16"

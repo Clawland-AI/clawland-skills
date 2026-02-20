@@ -1,0 +1,174 @@
+# Greenhouse Temperature Monitoring Configuration
+# For protecting crops from temperature extremes
+
+name: greenhouse-temperature-monitor
+version: 1.0.0
+description: "Monitor greenhouse temperature to protect crops"
+
+# Greenhouse-specific thresholds
+config:
+  high_threshold: 32.0      # Protect crops from heat stress
+  low_threshold: 8.0        # Prevent frost damage
+  rate_threshold: 3.0       # Gradual changes expected in greenhouse
+  cooldown_minutes: 10      # Quick response for agriculture
+  sensor_id: "greenhouse_main"
+  sensor_type: "DHT22"      # Also provides humidity data
+
+# Multi-channel alerts for critical agriculture application
+notifications:
+  # Primary: Instant mobile alerts via Telegram
+  telegram:
+    enabled: true
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${FARMER_TELEGRAM_CHAT}"
+  
+  # Secondary: Email for record keeping
+  email:
+    enabled: true
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: "${FARM_EMAIL}"
+    password: "${FARM_EMAIL_PASSWORD}"
+    from_email: "alerts@greenhouse.farm"
+    to_email: "farmer@greenhouse.farm"
+  
+  # Integration with farm management system
+  webhook:
+    enabled: true
+    url: "https://farm-management.example.com/api/temperature-alerts"
+    method: "POST"
+    headers:
+      Authorization: "Bearer ${FARM_API_TOKEN}"
+      Content-Type: "application/json"
+
+# Enhanced monitoring for agriculture
+triggers:
+  - type: cron
+    schedule: "*/2 * * * *"  # Check every 2 minutes
+    description: "Frequent monitoring for crop protection"
+  - type: event
+    event: "sensor.temperature"
+    description: "Immediate response to sensor readings"
+
+# Custom actions for greenhouse management
+actions:
+  on_high_temperature:
+    description: "High temperature response for greenhouse"
+    steps:
+      - log: "🌡️ HIGH TEMP ALERT: {temperature}°C in greenhouse (threshold: {high_threshold}°C)"
+      - notify_all_channels:
+          title: "🔥 GREENHOUSE HEAT ALERT"
+          message: |
+            🚨 HIGH TEMPERATURE WARNING 🚨
+            
+            Location: Main Greenhouse
+            Current: {temperature}°C
+            Threshold: {high_threshold}°C
+            Time: {timestamp}
+            
+            ⚠️ CROP HEAT STRESS RISK ⚠️
+            
+            Recommended Actions:
+            • Check ventilation fans
+            • Activate cooling system
+            • Check shade cloth deployment
+            • Monitor plant stress signs
+          priority: "critical"
+      - store_event:
+          type: "greenhouse_high_temp"
+          temperature: "{temperature}"
+          threshold: "{high_threshold}"
+          
+  on_low_temperature:
+    description: "Low temperature response for greenhouse"
+    steps:
+      - log: "🧊 LOW TEMP ALERT: {temperature}°C in greenhouse (threshold: {low_threshold}°C)"
+      - notify_all_channels:
+          title: "❄️ GREENHOUSE FROST ALERT"
+          message: |
+            🚨 LOW TEMPERATURE WARNING 🚨
+            
+            Location: Main Greenhouse
+            Current: {temperature}°C
+            Threshold: {low_threshold}°C
+            Time: {timestamp}
+            
+            ⚠️ FROST DAMAGE RISK ⚠️
+            
+            Recommended Actions:
+            • Activate heating system
+            • Check heater operation
+            • Cover sensitive plants
+            • Monitor for ice formation
+          priority: "critical"
+
+# Agriculture-specific state tracking
+state:
+  growing_season:
+    type: boolean
+    description: "Whether crops are actively growing"
+    default: true
+  
+  last_harvest_date:
+    type: date
+    description: "Date of last harvest"
+  
+  crop_type:
+    type: string
+    description: "Current crop being grown"
+    default: "mixed_vegetables"
+  
+  soil_temperature:
+    type: float
+    description: "Soil temperature if available"
+
+# Greenhouse hardware requirements
+requirements:
+  hardware:
+    - description: "DHT22 temperature/humidity sensor"
+      required: true
+      part_number: "DHT22"
+    - description: "Weatherproof sensor housing"
+      required: true
+    - description: "GPIO connection to PicoClaw"
+      required: true
+  
+  environment:
+    - description: "Protected from direct water spray"
+      required: true
+    - description: "Good air circulation around sensor"
+      required: true
+    - description: "Away from heating/cooling vents"
+      required: true
+
+# Seasonal configuration adjustments
+seasonal_configs:
+  spring:
+    high_threshold: 28.0      # Cooler for seedlings
+    low_threshold: 12.0       # Protect young plants
+  
+  summer:
+    high_threshold: 35.0      # Higher tolerance for mature plants
+    low_threshold: 15.0       # Less frost concern
+  
+  fall:
+    high_threshold: 25.0      # Harvest season protection
+    low_threshold: 8.0        # Increasing frost risk
+  
+  winter:
+    high_threshold: 22.0      # Energy conservation
+    low_threshold: 5.0        # Minimum plant survival
+
+# Integration examples
+integrations:
+  climate_control:
+    description: "Integrate with automated climate control"
+    webhook_url: "http://climate-controller.local/api/temperature-alert"
+  
+  irrigation_system:
+    description: "Coordinate with irrigation based on temperature"  
+    webhook_url: "http://irrigation.local/api/temp-update"
+  
+  growth_tracking:
+    description: "Log temperature data for growth analysis"
+    webhook_url: "http://farm-data.local/api/environmental-data"
