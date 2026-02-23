@@ -1,0 +1,32 @@
+# Temperature Alert Skill - Example Configuration
+# Copy this to config.yaml and customize
+
+# Temperature thresholds (Celsius)
+high_threshold: 35.0
+low_threshold: 5.0
+
+# Check interval in seconds (300 = 5 minutes)
+check_interval: 300
+
+# Notification channels to enable
+channels:
+  - telegram
+  # - discord
+  # - webhook
+
+# Telegram configuration
+# Get your chat ID: https://t.me/userinfobot
+telegram_chat_id: ""
+
+# Discord webhook configuration
+# Create webhook in Server Settings > Integrations > Webhooks
+discord_webhook: ""
+
+# Generic webhook (for custom integrations)
+webhook_url: ""
+
+# Optional: Custom alert message templates
+# messages:
+#   high: "🌡️ Temperature too high: {temperature}°C"
+#   low: "🥶 Temperature too low: {temperature}°C"
+#   normal: "✅ Temperature normal: {temperature}°C"

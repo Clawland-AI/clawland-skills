@@ -1,0 +1,134 @@
+# Temperature Alert Skill for Claw Agents
+# Monitors temperature sensors and sends alerts via multiple channels
+
+name: temperature-alert
+version: 1.0.0
+description: Monitor temperature thresholds and send multi-channel alerts when exceeded. Configurable high/low limits with Telegram, Discord, and webhook notifications.
+agent: any  # picclaw, nanoclaw, microclaw, moltclaw
+
+# How this skill can be triggered
+triggers:
+  - cron: "*/5 * * * *"        # Check every 5 minutes
+  - event: "sensor.temperature" # On temperature sensor event
+  - manual: "check-temperature"  # Manual trigger via command
+
+# Configuration options (user can customize)
+config:
+  high_threshold:
+    type: number
+    default: 35.0
+    description: "Temperature (°C) above which to trigger high alert"
+  low_threshold:
+    type: number
+    default: 5.0
+    description: "Temperature (°C) below which to trigger low alert"
+  check_interval:
+    type: number
+    default: 300
+    description: "Check interval in seconds (default: 300 = 5 min)"
+  channels:
+    type: array
+    default: ["telegram"]
+    description: "Notification channels: telegram, discord, webhook"
+    items:
+      enum: ["telegram", "discord", "webhook"]
+  webhook_url:
+    type: string
+    default: ""
+    description: "Custom webhook URL for notifications"
+  discord_webhook:
+    type: string
+    default: ""
+    description: "Discord webhook URL"
+  telegram_chat_id:
+    type: string
+    default: ""
+    description: "Telegram chat ID for alerts"
+
+# Tools used by this skill
+tools:
+  - name: read_temperature
+    description: "Read current temperature from sensor"
+    parameters:
+      sensor_id:
+        type: string
+        required: false
+        default: "default"
+  - name: send_telegram_alert
+    description: "Send alert via Telegram"
+    parameters:
+      message:
+        type: string
+        required: true
+      chat_id:
+        type: string
+        required: true
+  - name: send_discord_alert
+    description: "Send alert via Discord webhook"
+    parameters:
+      message:
+        type: string
+        required: true
+      webhook_url:
+        type: string
+        required: true
+  - name: send_webhook_alert
+    description: "Send alert to generic webhook"
+    parameters:
+      message:
+        type: string
+        required: true
+      webhook_url:
+        type: string
+        required: true
+
+# Actions to take based on temperature levels
+actions:
+  on_high_temperature:
+    description: "When temperature exceeds high_threshold"
+    steps:
+      - log: "High temperature detected: {temperature}°C"
+      - if: "telegram in config.channels"
+        then: send_telegram_alert(message="⚠️ HIGH TEMPERATURE ALERT\n\nTemperature: {temperature}°C\nThreshold: {config.high_threshold}°C\nTime: {timestamp}")
+      - if: "discord in config.channels"
+        then: send_discord_alert(message="⚠️ HIGH TEMPERATURE ALERT\n\nTemperature: {temperature}°C\nThreshold: {config.high_threshold}°C\nTime: {timestamp}")
+      - if: "webhook in config.channels and config.webhook_url"
+        then: send_webhook_alert(message="HIGH TEMPERATURE ALERT: {temperature}°C", webhook_url="{config.webhook_url}")
+
+  on_low_temperature:
+    description: "When temperature drops below low_threshold"
+    steps:
+      - log: "Low temperature detected: {temperature}°C"
+      - if: "telegram in config.channels"
+        then: send_telegram_alert(message="❄️ LOW TEMPERATURE ALERT\n\nTemperature: {temperature}°C\nThreshold: {config.low_threshold}°C\nTime: {timestamp}")
+      - if: "discord in config.channels"
+        then: send_discord_alert(message="❄️ LOW TEMPERATURE ALERT\n\nTemperature: {temperature}°C\nThreshold: {config.low_threshold}°C\nTime: {timestamp}")
+      - if: "webhook in config.channels and config.webhook_url"
+        then: send_webhook_alert(message="LOW TEMPERATURE ALERT: {temperature}°C", webhook_url="{config.webhook_url}")
+
+  on_normal:
+    description: "When temperature is within normal range"
+    steps:
+      - log: "Temperature normal: {temperature}°C (threshold: {config.low_threshold}-{config.high_threshold}°C)"
+
+# Example usage in agent conversation
+examples:
+  - trigger: "Check current temperature"
+    response: "Current temperature: {temperature}°C. Status: {status}"
+  
+  - trigger: "Set high alert to 40 degrees"
+    response: "High temperature threshold set to 40°C"
+  
+  - trigger: "Enable Discord alerts"
+    response: "Discord notifications enabled"
+
+# Requirements
+requirements:
+  - temperature_sensor: "A temperature sensor to read from"
+  - webhook_config: "At least one notification channel configured"
+
+# Metadata
+author: Clawland Community
+license: MIT
+homepage: https://github.com/Clawland-AI/clawland-skills
+repository: https://github.com/Clawland-AI/clawland-skills
