@@ -1,0 +1,101 @@
+name: temperature_alert
+version: 1.0.0
+description: Monitor temperature sensors and send alerts when thresholds are exceeded. Supports file, HTTP, MQTT, and GPIO sensors.
+author: JeanmiLiu
+tags:
+  - sensor
+  - temperature
+  - monitoring
+  - alert
+  - iot
+  - home automation
+license: MIT
+
+configuration:
+  sensor_type:
+    type: string
+    required: true
+    options: [file, http, mqtt, gpio]
+    description: Type of temperature sensor to monitor
+  
+  sensor_config:
+    type: object
+    required: true
+    description: Configuration specific to sensor type
+    properties:
+      # file sensor
+      file_path:
+        type: string
+        description: Path to temperature file (for 1-wire or similar)
+      # http sensor
+      url:
+        type: string
+        description: HTTP endpoint returning temperature JSON
+      headers:
+        type: object
+        description: HTTP headers if required
+      # mqtt sensor
+      broker:
+        type: string
+        description: MQTT broker URL
+      topic:
+        type: string
+        description: MQTT topic to subscribe
+      # gpio sensor
+      pin:
+        type: integer
+        description: GPIO pin number
+      
+  threshold:
+    type: number
+    required: true
+    description: Temperature threshold in Celsius
+      
+  hysteresis:
+    type: number
+    default: 1.0
+    description: Temperature difference to reset alert (prevents flapping)
+    
+  check_interval:
+    type: number
+    default: 60
+    description: Seconds between temperature checks
+    
+  rate_of_change_threshold:
+    type: number
+    default: 5.0
+    description: Alert if temperature changes faster than this (°C/min)
+    
+  notification:
+    type: object
+    required: true
+    description: Notification channel configuration
+    properties:
+      type:
+        type: string
+        required: true
+        options: [telegram, discord, webhook]
+      config:
+        type: object
+        description: Channel-specific config
+        
+actions:
+  start:
+    description: Start temperature monitoring
+    parameters:
+      - name: duration
+        type: number
+        required: false
+        description: Duration in seconds (0 = forever)
+        
+  stop:
+    description: Stop temperature monitoring
+    
+  status:
+    description: Get current monitoring status
+    returns:
+      type: object
+      properties:
+        current_temp: number
+        alert_state: boolean
+        last_check: string
