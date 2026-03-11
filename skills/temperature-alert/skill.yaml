@@ -1,0 +1,75 @@
+name: temperature-alert
+version: 1.0.0
+description: Monitor temperature readings and notify operators when thresholds or fast swings are detected.
+category: monitoring
+supported_agents:
+  - picclaw
+  - nanoclaw
+  - microclaw
+
+metadata:
+  owner: Clawland community
+  license: MIT
+  tags:
+    - temperature
+    - monitoring
+    - alerting
+    - edge-ai
+
+triggers:
+  - cron: "*/5 * * * *"
+  - event: sensor.temperature
+
+tools:
+  - read_sensor
+  - log_data
+  - send_telegram
+  - send_discord_webhook
+  - post_webhook
+
+inputs:
+  sensor:
+    source: sensor.temperature
+    field: celsius
+    fallback_poll_interval: 300
+
+thresholds:
+  low_warning: 5.0
+  low_critical: 0.0
+  high_warning: 35.0
+  high_critical: 45.0
+  rate_of_change: 5.0
+
+notifications:
+  dedupe_window_seconds: 900
+  telegram:
+    enabled: false
+    chat_id_env: CLAW_TEMPERATURE_ALERT_TELEGRAM_CHAT_ID
+  discord:
+    enabled: false
+    webhook_env: CLAW_TEMPERATURE_ALERT_DISCORD_WEBHOOK
+  webhook:
+    enabled: false
+    url_env: CLAW_TEMPERATURE_ALERT_WEBHOOK_URL
+
+actions:
+  on_normal: log_data
+  on_warning:
+    - send_telegram
+    - send_discord_webhook
+    - post_webhook
+  on_critical:
+    - send_telegram
+    - send_discord_webhook
+    - post_webhook
+
+message_templates:
+  warning: >-
+    Warning: {{sensor.name}} is at {{reading.celsius}} C, outside the warning
+    band ({{thresholds.low_warning}}-{{thresholds.high_warning}} C).
+  critical: >-
+    Critical: {{sensor.name}} is at {{reading.celsius}} C, outside the critical
+    band ({{thresholds.low_critical}}-{{thresholds.high_critical}} C).
+  rapid_change: >-
+    Rapid change detected on {{sensor.name}}: {{reading.delta_celsius_per_minute}}
+    C/min exceeds {{thresholds.rate_of_change}} C/min.
