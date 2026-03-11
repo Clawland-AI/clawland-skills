@@ -12,39 +12,51 @@ Clawland Skills is a curated collection of **plug-and-play capabilities** that a
 
 ## What is a Skill?
 
-A skill is a YAML configuration + optional supporting files that teach a Claw agent how to handle a specific domain:
+A skill is a directory with a machine-readable YAML manifest plus optional
+supporting files that teach a Claw agent how to handle a specific domain:
 
 ```yaml
-# skills/temperature-monitor/skill.yaml
-name: temperature-monitor
+# skills/temperature-alert/skill.yaml
+name: temperature-alert
 version: 1.0.0
 description: Monitor temperature sensors and alert on anomalies
-agent: picclaw  # or nanoclaw, microclaw, moltclaw, any
+supported_agents:
+  - picclaw
+  - nanoclaw
+  - microclaw
 
 triggers:
-  - cron: "*/5 * * * *"        # Every 5 minutes
-  - event: "sensor.temperature" # On sensor reading
+  - cron: "*/5 * * * *"
+  - event: "sensor.temperature"
 
 tools:
   - read_sensor
-  - send_alert
   - log_data
+  - send_telegram
+  - send_discord_webhook
+  - post_webhook
 
 thresholds:
-  warning: 35.0
-  critical: 45.0
-  rate_of_change: 5.0  # degrees per minute
+  low_warning: 5.0
+  low_critical: 0.0
+  high_warning: 35.0
+  high_critical: 45.0
+  rate_of_change: 5.0
 
-actions:
-  on_warning: "Send Telegram alert to operator"
-  on_critical: "Send alert + activate cooling relay + escalate to cloud"
+notifications:
+  telegram:
+    enabled: false
+  discord:
+    enabled: false
+  webhook:
+    enabled: false
 ```
 
 ## Skill Categories
 
 | Category | Examples |
 |----------|----------|
-| **Monitoring** | temperature-monitor, humidity-watch, power-usage |
+| **Monitoring** | temperature-alert, humidity-watch, power-usage |
 | **Security** | motion-detect, door-sensor, camera-patrol |
 | **Agriculture** | soil-moisture, greenhouse-climate, irrigation-control |
 | **Industrial** | vibration-analysis, predictive-maintenance, energy-audit |
@@ -57,13 +69,16 @@ actions:
 
 ```bash
 # On PicClaw
-picclaw skill install temperature-monitor
+picclaw skills install temperature-alert
 
 # On NanoClaw
-nanoclaw skill install camera-patrol
+nanoclaw skills install temperature-alert
+
+# On MicroClaw
+microclaw skills install temperature-alert
 
 # From MoltClaw (remote install to edge node)
-moltclaw fleet skill install --node edge-01 temperature-monitor
+moltclaw fleet skill install --node edge-01 temperature-alert
 ```
 
 ## Creating a Skill
@@ -71,10 +86,17 @@ moltclaw fleet skill install --node edge-01 temperature-monitor
 1. Fork this repository
 2. Create a directory under `skills/your-skill-name/`
 3. Add `skill.yaml` with the skill definition
-4. Add any supporting files (drivers, scripts, templates)
-5. Submit a Pull Request
+4. Add a local `README.md` explaining configuration and install steps
+5. Add any supporting files (drivers, scripts, templates)
+6. Submit a Pull Request
 
 See the [Skill Development Guide](docs/SKILL-DEVELOPMENT.md) for detailed instructions.
+
+## Available Skills
+
+| Skill | Purpose | Agents |
+|-------|---------|--------|
+| `temperature-alert` | High/low threshold and rapid-change temperature alerting with Telegram, Discord, and webhook fan-out | PicClaw, NanoClaw, MicroClaw |
 
 ## Status
 
