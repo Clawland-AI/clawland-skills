@@ -1,0 +1,378 @@
+# Temperature Alert Skill Configuration
+# Version: 1.0.0
+# Compatible with: PicClaw, NanoClaw, MicroClaw
+
+skill:
+  name: "temperature-alert"
+  version: "1.0.0"
+  description: "Universal temperature monitoring and alerting skill with multi-channel notifications"
+  author: "Clawland Community"
+  license: "MIT"
+  homepage: "https://github.com/Clawland-AI/clawland-skills/tree/main/skills/temperature-alert"
+  repository: "https://github.com/Clawland-AI/clawland-skills"
+  keywords:
+    - temperature
+    - monitoring
+    - alert
+    - sensor
+    - notification
+    - telegram
+    - discord
+
+  # Agent compatibility
+  compatible_agents:
+    - picclaw
+    - nanoclaw
+    - microclaw
+    - moltclaw
+
+  # Minimum agent version required
+  min_agent_version: "0.1.0"
+
+# Sensor Configuration
+sensors:
+  # Auto-detect temperature sensors
+  auto_detect: true
+
+  # Or specify sensors explicitly
+  devices:
+    - id: "temp-sensor-01"
+      type: "DHT22"
+      pin: 4
+      name: "Primary Temperature Sensor"
+      location: "Default Location"
+      enabled: true
+
+  # Sensor reading settings
+  sampling:
+    interval_seconds: 30        # Read every 30 seconds
+    timeout_seconds: 5          # Timeout for each reading
+    retry_count: 3              # Retry failed readings
+    retry_delay_seconds: 2      # Delay between retries
+
+  # Sensor health monitoring
+  health_check:
+    enabled: true
+    interval_seconds: 300       # Check sensor health every 5 minutes
+    max_failures: 5             # Alert after 5 consecutive failures
+    recovery_threshold: 3       # Mark recovered after 3 successful reads
+
+# Temperature Thresholds
+thresholds:
+  # High temperature thresholds
+  high_critical: 35.0          # °C - Critical alert
+  high_warning: 30.0           # °C - Warning alert
+  high_info: 28.0              # °C - Informational
+
+  # Low temperature thresholds
+  low_critical: 10.0           # °C - Critical alert
+  low_warning: 15.0            # °C - Warning alert
+  low_info: 18.0               # °C - Informational
+
+  # Threshold behavior
+  hysteresis: 1.0              # °C - Prevent threshold bouncing
+  comparison_mode: "strict"    # strict, average, median
+
+  # Rate of change detection
+  rate_of_change:
+    enabled: true
+    threshold_celsius_per_minute: 2.0
+    window_seconds: 60         # Calculate rate over this window
+    alert_on_rapid_rise: true
+    alert_on_rapid_fall: true
+
+# Alert Configuration
+alerts:
+  # Alert levels
+  levels:
+    critical:
+      priority: 1
+      color: "#FF0000"
+      icon: "🚨"
+      sound: "critical_alert.mp3"
+      auto_escalate: true
+      response_time_minutes: 5
+
+    warning:
+      priority: 2
+      color: "#FFA500"
+      icon: "⚠️"
+      sound: "warning_alert.mp3"
+      auto_escalate: true
+      response_time_minutes: 30
+
+    info:
+      priority: 3
+      color: "#0000FF"
+      icon: "ℹ️"
+      sound: null
+      auto_escalate: false
+      response_time_minutes: 60
+
+  # Alert behavior
+  behavior:
+    debounce_seconds: 30       # Prevent alert spam
+    cooldown_seconds: 300      # Min time between same alerts
+    max_alerts_per_hour: 20    # Rate limiting
+
+  # Alert message templates
+  templates:
+    high_critical: |
+      🚨 CRITICAL: High Temperature
+
+      📍 Location: {location}
+      🌡️ Temperature: {temperature}°C
+      ⚠️ Threshold: {threshold}°C
+      ⏱️ Time: {timestamp}
+
+      IMMEDIATE ACTION REQUIRED!
+
+    high_warning: |
+      ⚠️ WARNING: Elevated Temperature
+
+      📍 Location: {location}
+      🌡️ Temperature: {temperature}°C
+      📊 Threshold: {threshold}°C
+      ⏱️ Time: {timestamp}
+
+      Please investigate.
+
+    low_critical: |
+      🥶 CRITICAL: Low Temperature
+
+      📍 Location: {location}
+      🌡️ Temperature: {temperature}°C
+      ⚠️ Threshold: {threshold}°C
+      ⏱️ Time: {timestamp}
+
+      Risk of freezing/condensation!
+
+  # Escalation policy
+  escalation:
+    enabled: true
+    levels:
+      - delay_seconds: 300      # Level 1: 5 minutes
+        notify_channels:
+          - telegram
+          - discord
+
+      - delay_seconds: 600      # Level 2: 10 minutes
+        notify_channels:
+          - telegram
+          - discord
+          - email
+          - sms
+
+      - delay_seconds: 1800     # Level 3: 30 minutes
+        notify_channels:
+          - telegram
+          - discord
+          - email
+          - sms
+          - webhook
+        escalate_to_manager: true
+
+# Notification Channels
+notifications:
+  # Telegram Bot
+  telegram:
+    enabled: false
+    bot_token: "${TELEGRAM_BOT_TOKEN}"  # Set via environment variable
+    chat_id: "${TELEGRAM_CHAT_ID}"
+    parse_mode: "Markdown"
+    disable_notification: false
+    timeout_seconds: 10
+
+  # Discord Webhook
+  discord:
+    enabled: false
+    webhook_url: "${DISCORD_WEBHOOK_URL}"
+    username: "Temperature Alert Bot"
+    avatar_url: "https://clawland.ai/assets/alert-bot.png"
+    embed_color: null          # Auto-set based on severity
+    mention_everyone: false
+    timeout_seconds: 10
+
+  # Email Notifications
+  email:
+    enabled: false
+    smtp_server: "${SMTP_SERVER}"
+    smtp_port: 587
+    smtp_user: "${SMTP_USER}"
+    smtp_password: "${SMTP_PASSWORD}"
+    from_address: "${ALERT_FROM_EMAIL}"
+    from_name: "Temperature Alert System"
+    recipients:
+      - "${ADMIN_EMAIL}"
+    subject_template: "[{severity}] {title}"
+    use_tls: true
+    timeout_seconds: 30
+
+  # Generic Webhook
+  webhook:
+    enabled: false
+    url: "${WEBHOOK_URL}"
+    method: "POST"
+    headers:
+      Content-Type: "application/json"
+      Authorization: "Bearer ${WEBHOOK_TOKEN}"
+    timeout_seconds: 10
+    retry_count: 3
+    retry_delay_seconds: 5
+
+  # SMS (via webhook integration)
+  sms:
+    enabled: false
+    provider: "twilio"         # twilio, nexmo, custom
+    webhook_url: "${SMS_WEBHOOK_URL}"
+    recipients:
+      - "${ONCALL_PHONE}"
+    timeout_seconds: 10
+
+  # Slack Integration
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channel: "#alerts"
+    username: "Temperature Alert Bot"
+    icon_emoji: ":thermometer:"
+
+# Data Logging
+logging:
+  # Local logging
+  local:
+    enabled: true
+    path: "/var/log/clawland/temperature-alert.log"
+    max_size_mb: 100
+    backup_count: 5
+    format: "json"             # json, text
+
+  # Time-series database
+  timeseries:
+    enabled: false
+    type: "influxdb"           # influxdb, prometheus, timescaledb
+    host: "localhost"
+    port: 8086
+    database: "clawland_metrics"
+    measurement: "temperature"
+    retention_days: 365
+
+  # Remote logging
+  remote:
+    enabled: false
+    endpoint: "${MOLTCLAW_ENDPOINT}"
+    api_key: "${MOLTCLAW_API_KEY}"
+    batch_size: 100
+    flush_interval_seconds: 60
+
+# Advanced Features
+advanced:
+  # Predictive alerts
+  prediction:
+    enabled: false
+    model: "linear_regression"  # linear_regression, exponential_smoothing
+    lookback_minutes: 60
+    predict_minutes: 30
+    confidence_threshold: 0.8
+    alert_if_predicted_exceeds: true
+
+  # Multi-sensor aggregation
+  aggregation:
+    enabled: false
+    strategy: "average"        # average, max, min, median
+    min_sensors_required: 2    # Minimum sensors for aggregation
+
+  # Anomaly detection
+  anomaly_detection:
+    enabled: false
+    algorithm: "isolation_forest"  # isolation_forest, z_score
+    training_period_hours: 168     # 1 week
+    sensitivity: "medium"          # low, medium, high
+    contamination: 0.1
+
+  # Scheduled reports
+  reports:
+    daily:
+      enabled: false
+      time: "06:00"
+      recipients:
+        - "${ADMIN_EMAIL}"
+      include:
+        - min_max_avg
+        - alert_count
+        - trend_chart
+
+    weekly:
+      enabled: false
+      day: "monday"
+      time: "08:00"
+      include:
+        - statistics
+        - trends
+        - recommendations
+
+# Quiet Hours
+quiet_hours:
+  enabled: false
+  schedule:
+    - timezone: "America/New_York"
+      weekdays:
+        start: "22:00"
+        end: "06:00"
+      weekends:
+        start: "18:00"
+        end: "08:00"
+
+  # During quiet hours, only send critical alerts
+  override_for_critical: true
+  silence_all: false
+
+# Maintenance Mode
+maintenance:
+  # Manual maintenance mode
+  enabled: false
+  silence_alerts: false
+  silence_duration_minutes: 60
+  reason: ""
+
+  # Auto-enable during maintenance windows
+  schedule:
+    - day: "sunday"
+      start: "02:00"
+      end: "06:00"
+      reason: "Scheduled system maintenance"
+
+# Development and Testing
+debug:
+  enabled: false
+  log_level: "INFO"            # DEBUG, INFO, WARNING, ERROR
+  log_to_file: true
+  log_to_console: true
+
+  # Simulation mode
+  simulation:
+    enabled: false
+    mock_sensor: true
+    mock_temperature: 25.0
+    mock_rate_of_change: 0.5
+
+# Performance Tuning
+performance:
+  # Memory limits (for MicroClaw)
+  max_memory_kb: 64
+
+  # Processing threads
+  worker_threads: 1
+
+  # Queue sizes
+  alert_queue_size: 100
+  log_queue_size: 1000
+
+# Metadata
+metadata:
+  created_at: "2026-04-03T10:30:00Z"
+  updated_at: "2026-04-03T10:30:00Z"
+  version_history:
+    - version: "1.0.0"
+      date: "2026-04-03"
+      changes: "Initial release"
