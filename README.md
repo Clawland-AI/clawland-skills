@@ -46,12 +46,18 @@ actions:
 |----------|----------|
 | **Monitoring** | temperature-monitor, humidity-watch, power-usage |
 | **Security** | motion-detect, door-sensor, camera-patrol |
-| **Agriculture** | soil-moisture, greenhouse-climate, irrigation-control |
+| **Agriculture** | aquaculture-monitoring, soil-moisture, greenhouse-climate, irrigation-control |
 | **Industrial** | vibration-analysis, predictive-maintenance, energy-audit |
 | **Home** | elder-care, pet-monitor, plant-watering |
 | **DevOps** | server-health, log-watcher, deploy-notifier |
 | **Communication** | telegram-bot, discord-relay, email-digest |
 | **Data** | csv-logger, influxdb-writer, grafana-dashboard |
+
+## Available Skills
+
+| Skill | Category | Description |
+|-------|----------|-------------|
+| [`aquaculture-monitoring`](skills/aquaculture-monitoring/) | Agriculture | Monitors dissolved oxygen, pH, and water temperature; controls aerators; learns trends from Memory; and generates daily pond reports. |
 
 ## Installing a Skill
 

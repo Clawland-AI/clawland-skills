@@ -1,0 +1,170 @@
+name: aquaculture-monitoring
+version: 1.0.0
+description: Monitor pond dissolved oxygen, pH, and temperature; control aerators; generate daily reports; and learn trends from Memory.
+agent: any
+supported_agents:
+  - picclaw
+  - nanoclaw
+  - microclaw
+category: agriculture
+
+triggers:
+  - cron: "*/5 * * * *"
+    description: Sample water quality sensors every 5 minutes.
+  - event: sensor.dissolved_oxygen
+  - event: sensor.ph
+  - event: sensor.temperature
+  - cron: "0 7 * * *"
+    description: Generate the daily pond health report at 07:00.
+
+tools:
+  - read_sensor
+  - set_relay
+  - send_alert
+  - log_data
+  - memory.read
+  - memory.write
+  - generate_report
+
+sensors:
+  dissolved_oxygen:
+    unit: mg/L
+    aliases: [do, oxygen]
+    calibration: two_point
+  ph:
+    unit: pH
+    calibration: two_point
+  temperature:
+    unit: celsius
+    aliases: [water_temperature, temp]
+    calibration: offset
+
+thresholds:
+  dissolved_oxygen:
+    critical_low: 3.0
+    warning_low: 4.5
+    target_min: 5.5
+    target_max: 8.5
+  ph:
+    critical_low: 6.5
+    warning_low: 6.8
+    target_min: 7.0
+    target_max: 8.5
+    warning_high: 8.8
+    critical_high: 9.2
+  temperature:
+    critical_low: 15.0
+    warning_low: 18.0
+    target_min: 20.0
+    target_max: 30.0
+    warning_high: 32.0
+    critical_high: 35.0
+  trend_window_hours: 24
+  rate_of_change:
+    temperature_c_per_hour: 2.0
+    ph_per_hour: 0.3
+    dissolved_oxygen_mg_l_per_hour: 1.0
+
+actuators:
+  aerator:
+    type: relay
+    channel: aerator_main
+    fail_safe_state: on
+  backup_aerator:
+    type: relay
+    channel: aerator_backup
+    fail_safe_state: on
+
+notifications:
+  channels:
+    telegram:
+      enabled: true
+      template: "Aquaculture alert: {{severity}} {{metric}}={{value}} {{unit}} in {{pond_id}}. Action: {{action}}"
+    discord:
+      enabled: true
+      template: "**{{severity}}** pond {{pond_id}}: {{metric}} {{value}}{{unit}}. {{action}}"
+    webhook:
+      enabled: true
+      method: POST
+      body: json
+  escalation_minutes: 15
+
+actions:
+  on_normal:
+    - log_data: water_quality
+    - memory.write: aquaculture.last_normal_reading
+  on_do_warning_low:
+    - set_relay:
+        channel: aerator_main
+        state: on
+    - send_alert:
+        severity: warning
+        message: Dissolved oxygen is below the warning threshold; main aerator started.
+    - memory.write: aquaculture.aerator_events
+  on_do_critical_low:
+    - set_relay:
+        channel: aerator_main
+        state: on
+    - set_relay:
+        channel: aerator_backup
+        state: on
+    - send_alert:
+        severity: critical
+        message: Dissolved oxygen is critically low; all aeration enabled and operator escalation required.
+    - memory.write: aquaculture.critical_events
+  on_ph_out_of_range:
+    - send_alert:
+        severity: warning
+        message: pH is outside the safe operating range; inspect buffering, feed, and water exchange plan.
+    - memory.write: aquaculture.ph_events
+  on_temperature_out_of_range:
+    - send_alert:
+        severity: warning
+        message: Water temperature is outside target range; check shading, inflow, and aeration schedule.
+    - memory.write: aquaculture.temperature_events
+  on_fast_trend_change:
+    - send_alert:
+        severity: warning
+        message: Rapid water-quality change detected from Memory trend window.
+    - memory.write: aquaculture.trend_anomalies
+  on_daily_report:
+    - memory.read: aquaculture.*
+    - generate_report:
+        template: daily_pond_report.md
+        output: reports/aquaculture/{{date}}.md
+    - send_alert:
+        severity: info
+        message: Daily aquaculture monitoring report generated.
+
+memory:
+  namespaces:
+    - aquaculture.readings
+    - aquaculture.aerator_events
+    - aquaculture.critical_events
+    - aquaculture.trend_anomalies
+  trend_learning:
+    enabled: true
+    baseline_days: 14
+    compare_by_time_of_day: true
+    learned_fields:
+      - dissolved_oxygen
+      - ph
+      - temperature
+      - aerator_runtime_minutes
+    anomaly_prompt: |
+      Compare the current 24-hour pond water-quality pattern with the learned 14-day baseline.
+      Flag recurring low-oxygen windows, feed-time pH swings, fast temperature ramps, and aerator runtime drift.
+      Recommend one operational adjustment and one sensor/actuator inspection item.
+
+reporting:
+  daily_report:
+    time: "07:00"
+    sections:
+      - water_quality_summary
+      - threshold_breaches
+      - aerator_runtime
+      - trend_learning_findings
+      - recommended_actions
+    recipients:
+      - telegram
+      - webhook
