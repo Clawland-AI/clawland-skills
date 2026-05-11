@@ -1,0 +1,88 @@
+name: temperature-alert
+version: 1.0.0
+description: Monitor temperature readings, classify high/low threshold breaches, and notify operators across Claw agents.
+agent: any
+supported_agents:
+  - picclaw
+  - nanoclaw
+  - microclaw
+category: monitoring
+
+triggers:
+  - event: sensor.temperature
+    description: Evaluate every incoming temperature reading.
+  - cron: "*/5 * * * *"
+    description: Poll the configured temperature sensor every 5 minutes when event streaming is unavailable.
+
+tools:
+  - read_sensor
+  - send_alert
+  - log_data
+  - memory.read
+  - memory.write
+
+sensors:
+  temperature:
+    unit: celsius
+    aliases: [temp, ambient_temperature, board_temperature]
+    calibration: offset
+
+thresholds:
+  temperature:
+    warning_low: 5.0
+    critical_low: 0.0
+    warning_high: 35.0
+    critical_high: 45.0
+    hysteresis: 1.0
+  trend_window_minutes: 15
+  rate_of_change_c_per_minute: 2.0
+
+notifications:
+  channels:
+    telegram:
+      enabled: true
+      template: "Temperature {{severity}}: {{value}}°C at {{sensor_id}}. {{action}}"
+    discord:
+      enabled: true
+      template: "**Temperature {{severity}}** `{{sensor_id}}` = {{value}}°C. {{action}}"
+    webhook:
+      enabled: true
+      method: POST
+      body: json
+  dedupe_minutes: 10
+  escalation_minutes: 15
+
+actions:
+  on_normal:
+    - log_data: temperature.readings
+    - memory.write: temperature.last_normal_reading
+  on_warning_low:
+    - send_alert:
+        severity: warning
+        message: Temperature is below the warning threshold; check heating, enclosure seals, and sensor placement.
+    - memory.write: temperature.warning_events
+  on_critical_low:
+    - send_alert:
+        severity: critical
+        message: Temperature is critically low; escalate to an operator and protect affected equipment or livestock.
+    - memory.write: temperature.critical_events
+  on_warning_high:
+    - send_alert:
+        severity: warning
+        message: Temperature is above the warning threshold; check cooling, airflow, and recent load changes.
+    - memory.write: temperature.warning_events
+  on_critical_high:
+    - send_alert:
+        severity: critical
+        message: Temperature is critically high; escalate immediately and apply the local shutdown/cooling procedure.
+    - memory.write: temperature.critical_events
+  on_fast_temperature_change:
+    - send_alert:
+        severity: warning
+        message: Temperature changed faster than the configured trend threshold.
+    - memory.write: temperature.trend_events
+
+runtime_notes:
+  picclaw: Runs the full polling, Memory, and notification workflow on edge Linux nodes.
+  nanoclaw: Aggregates readings from multiple PicoClaw/MicroClaw nodes and applies the same thresholds regionally.
+  microclaw: Samples the sensor and emits temperature events; alert delivery can be forwarded upstream when local network clients are constrained.

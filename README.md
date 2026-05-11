@@ -53,6 +53,12 @@ actions:
 | **Communication** | telegram-bot, discord-relay, email-digest |
 | **Data** | csv-logger, influxdb-writer, grafana-dashboard |
 
+## Available Skills
+
+| Skill | Category | Description |
+|-------|----------|-------------|
+| [`temperature-alert`](skills/temperature-alert/) | Monitoring | Monitors temperature readings, applies configurable high/low thresholds, and sends Telegram, Discord, or webhook alerts. |
+
 ## Installing a Skill
 
 ```bash
