@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -63,7 +64,18 @@ func main() {
 	minTemp := flag.Float64("min-temp", 2.0, "Minimum allowed temperature in Celsius")
 	maxTemp := flag.Float64("max-temp", 8.0, "Maximum allowed temperature in Celsius")
 	maxHumidity := flag.Float64("max-humidity", 85.0, "Maximum allowed relative humidity")
+	verifyAudit := flag.String("verify-audit", "", "Path to audit_log.jsonl to verify instead of generating a report")
 	flag.Parse()
+
+	if *verifyAudit != "" {
+		finalHash, err := verifyAuditLog(*verifyAudit)
+		if err != nil {
+			exitf("verify audit chain: %v", err)
+		}
+		fmt.Printf("audit chain verified\n")
+		fmt.Printf("final audit hash: %s\n", finalHash)
+		return
+	}
 
 	if *input == "" {
 		exitf("missing --input")
@@ -249,6 +261,54 @@ func writeAuditLog(path string, readings []EvaluatedReading) (string, error) {
 			return "", err
 		}
 		previousHash = recordHash
+	}
+	return previousHash, nil
+}
+
+func verifyAuditLog(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	previousHash := strings.Repeat("0", 64)
+	expectedSequence := 1
+	for {
+		var record AuditRecord
+		if err := decoder.Decode(&record); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", err
+		}
+		if record.Sequence != expectedSequence {
+			return "", fmt.Errorf("sequence %d: expected sequence %d", record.Sequence, expectedSequence)
+		}
+		if record.PreviousHash != previousHash {
+			return "", fmt.Errorf("sequence %d: previous_hash mismatch", record.Sequence)
+		}
+
+		eventJSON, err := json.Marshal(record.Event)
+		if err != nil {
+			return "", err
+		}
+		eventHash := sha256Hex(eventJSON)
+		if record.EventHash != eventHash {
+			return "", fmt.Errorf("sequence %d: event_hash mismatch", record.Sequence)
+		}
+
+		recordHash := sha256Hex([]byte(record.PreviousHash + record.EventHash))
+		if record.Hash != recordHash {
+			return "", fmt.Errorf("sequence %d: hash mismatch", record.Sequence)
+		}
+
+		previousHash = record.Hash
+		expectedSequence++
+	}
+	if expectedSequence == 1 {
+		return "", fmt.Errorf("audit log is empty")
 	}
 	return previousHash, nil
 }

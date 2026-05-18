@@ -39,6 +39,7 @@
 - CSV export path:
 - PDF export path:
 - Audit log path:
+- Verification command:
 - Hash-chain verification result:
 
 ## Operator Sign-Off

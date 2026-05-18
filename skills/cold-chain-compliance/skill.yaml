@@ -143,12 +143,13 @@ commands:
     --input skills/cold-chain-compliance/examples/readings.jsonl
     --out /tmp/cold-chain-report
   validate_audit_chain: >
-    Re-run the tool against the same JSONL input and compare the final hash in
-    audit_log.jsonl. A changed event changes every downstream hash.
+    go run skills/cold-chain-compliance/tools/coldchain_report.go
+    --verify-audit /tmp/cold-chain-report/audit_log.jsonl
 
 acceptance_criteria:
   - CSV export includes every reading with status and violation reason columns.
   - PDF export is generated without external dependencies.
   - Audit log links every event with a SHA-256 previous_hash/hash chain.
+  - Audit verification rejects tampered event data or broken hash links.
   - Report template includes GSP/HACCP fields and operator sign-off.
   - Memory learning instructions explain how to detect recurring excursions.
