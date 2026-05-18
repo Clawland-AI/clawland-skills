@@ -1,0 +1,154 @@
+name: cold-chain-compliance
+version: 1.0.0
+description: Generate GSP/HACCP-ready cold-chain compliance exports, tamper-evident audit logs, and daily regulatory reports from refrigerated transport or storage sensor events.
+agent: picclaw
+category: compliance
+tags:
+  - cold-chain
+  - gsp
+  - haccp
+  - audit
+  - reporting
+
+triggers:
+  - cron: "*/5 * * * *"
+    description: Ingest latest cold-chain temperature, humidity, door, power, and GPS readings.
+  - cron: "0 7 * * *"
+    description: Generate previous-day CSV, PDF, and hash-chain audit artifacts.
+  - event: sensor.cold_chain_reading
+  - event: compliance.report_requested
+
+tools:
+  - exec
+  - append_file
+  - message
+  - report_gene
+
+inputs:
+  reading_schema:
+    timestamp: RFC3339 timestamp
+    asset_id: Vehicle, cold room, crate, or logger identifier
+    sensor_id: Sensor/logger identifier
+    location: Human-readable location or route checkpoint
+    temperature_c: Numeric temperature in Celsius
+    humidity_percent: Numeric relative humidity percentage
+    door_open: Boolean door state
+    power_ok: Boolean refrigeration power state
+    gps: Optional latitude,longitude string
+    notes: Optional operator or sensor note
+  supported_sources:
+    - USB temperature logger export
+    - MQTT or HTTP sensor gateway
+    - MaixCAM or PicClaw JSON event
+    - Manual incident correction entry
+
+thresholds:
+  frozen:
+    temperature_c:
+      min: -25.0
+      max: -15.0
+      excursion_minutes_allowed: 10
+  chilled:
+    temperature_c:
+      min: 2.0
+      max: 8.0
+      excursion_minutes_allowed: 15
+  pharmaceutical:
+    temperature_c:
+      min: 2.0
+      max: 8.0
+      excursion_minutes_allowed: 0
+    humidity_percent:
+      max: 85.0
+  door_open:
+    warning_seconds: 60
+    critical_seconds: 180
+  power:
+    critical_when: power_ok == false
+
+actions:
+  on_normal:
+    - Append reading to daily JSONL memory.
+    - Include reading in next CSV and PDF report.
+  on_temperature_warning:
+    - Send channel alert with asset, location, current reading, threshold, and elapsed excursion time.
+    - Increase sampling frequency to one minute until recovery.
+  on_temperature_critical:
+    - Send all-channel alert.
+    - Mark report row as excursion.
+    - Ask operator to confirm product disposition and corrective action.
+  on_door_open_warning:
+    - Alert operator to close door.
+    - Record door event in audit log.
+  on_power_failure:
+    - Alert operator immediately.
+    - Start contingency checklist: backup power, transfer goods, record corrective action.
+
+exports:
+  csv:
+    filename: cold_chain_events.csv
+    required_columns:
+      - timestamp
+      - asset_id
+      - sensor_id
+      - location
+      - temperature_c
+      - humidity_percent
+      - door_open
+      - power_ok
+      - status
+      - violations
+  pdf:
+    filename: compliance_report.pdf
+    sections:
+      - Executive summary
+      - Temperature and humidity range
+      - Excursions and corrective actions
+      - Audit chain verification
+      - Operator sign-off
+  audit_log:
+    filename: audit_log.jsonl
+    tamper_evidence: SHA-256 hash chain
+    fields:
+      - sequence
+      - previous_hash
+      - event_hash
+      - hash
+      - event
+
+daily_report:
+  schedule: "0 7 * * *"
+  prompt: >
+    Generate the previous 24-hour cold-chain compliance package. Include
+    min/avg/max temperature, max humidity, count and duration of excursions,
+    door-open events, power failures, corrective actions, and a hash-chain
+    audit verification footer.
+  template: templates/gsp-haccp-report.md
+
+memory_learning:
+  enabled: true
+  write_observations:
+    - Repeated route segment or warehouse bay where excursions begin.
+    - Door-open patterns by time of day and operator handoff.
+    - Sensor drift or logger battery issues.
+    - Recovery time after refrigeration power restoration.
+  gene_strategy:
+    - Detect recurring excursions from Memory over the last 7 days.
+    - Recommend pre-cooling, route changes, or loading sequence changes.
+    - Report proven mitigations with report_gene for reuse by similar nodes.
+
+commands:
+  generate_package: >
+    go run skills/cold-chain-compliance/tools/coldchain_report.go
+    --input skills/cold-chain-compliance/examples/readings.jsonl
+    --out /tmp/cold-chain-report
+  validate_audit_chain: >
+    Re-run the tool against the same JSONL input and compare the final hash in
+    audit_log.jsonl. A changed event changes every downstream hash.
+
+acceptance_criteria:
+  - CSV export includes every reading with status and violation reason columns.
+  - PDF export is generated without external dependencies.
+  - Audit log links every event with a SHA-256 previous_hash/hash chain.
+  - Report template includes GSP/HACCP fields and operator sign-off.
+  - Memory learning instructions explain how to detect recurring excursions.

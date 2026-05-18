@@ -1,0 +1,5 @@
+{"timestamp":"2026-05-18T00:00:00Z","asset_id":"truck-07","sensor_id":"logger-a","location":"depot","temperature_c":4.1,"humidity_percent":62.0,"door_open":false,"power_ok":true,"gps":"40.4168,-3.7038","notes":"departure"}
+{"timestamp":"2026-05-18T02:00:00Z","asset_id":"truck-07","sensor_id":"logger-a","location":"route-a12","temperature_c":5.0,"humidity_percent":64.0,"door_open":false,"power_ok":true,"gps":"40.9550,-3.6200","notes":"normal transit"}
+{"timestamp":"2026-05-18T04:00:00Z","asset_id":"truck-07","sensor_id":"logger-a","location":"service-stop","temperature_c":8.9,"humidity_percent":69.0,"door_open":true,"power_ok":true,"gps":"41.2020,-3.7420","notes":"door opened for inspection"}
+{"timestamp":"2026-05-18T04:10:00Z","asset_id":"truck-07","sensor_id":"logger-a","location":"service-stop","temperature_c":7.2,"humidity_percent":67.0,"door_open":false,"power_ok":true,"gps":"41.2020,-3.7420","notes":"recovered after door closed"}
+{"timestamp":"2026-05-18T06:00:00Z","asset_id":"truck-07","sensor_id":"logger-a","location":"delivery-bay","temperature_c":6.3,"humidity_percent":70.0,"door_open":false,"power_ok":true,"gps":"41.3874,2.1686","notes":"arrival"}
