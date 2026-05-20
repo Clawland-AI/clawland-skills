@@ -1,0 +1,24 @@
+name: temperature-alert
+version: 1.0.0
+description: Temperature threshold alert with multi-channel notifications
+author: iyop666
+license: MIT
+
+triggers:
+  - type: sensor
+    source: temperature
+    interval: 60s
+
+actions:
+  - type: notification
+    channels:
+      - telegram
+      - discord
+      - webhook
+
+config:
+  thresholds:
+    high: 30.0
+    low: 10.0
+  unit: celsius
+  cooldown: 300
