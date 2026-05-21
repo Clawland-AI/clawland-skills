@@ -1,0 +1,99 @@
+# Temperature Alert Skill
+# Monitor temperature thresholds and send multi-channel notifications
+
+name: temperature-alert
+version: 1.0.0
+description: Temperature threshold alert skill with configurable high/low limits and multi-channel notifications (Telegram, Discord, webhook)
+author: Clawland Community
+license: MIT
+category: monitoring
+tags:
+  - temperature
+  - alert
+  - sensor
+  - iot
+  - home-automation
+
+# Compatible agents
+agents:
+  - picclaw
+  - nanoclaw
+  - microclaw
+
+# Triggers
+triggers:
+  # Poll sensor on a schedule
+  - type: cron
+    schedule: "*/5 * * * *"
+    description: "Check temperature every 5 minutes"
+  # React to incoming sensor events
+  - type: event
+    event: "sensor.temperature"
+    description: "React to real-time temperature readings"
+
+# Tools / capabilities required
+tools:
+  - read_sensor
+  - send_notification
+  - log_data
+
+# Configurable thresholds (in Celsius by default)
+thresholds:
+  high:
+    warning: 35.0
+    critical: 45.0
+  low:
+    warning: 5.0
+    critical: -5.0
+  rate_of_change:
+    warning: 3.0
+    critical: 8.0
+  unit: celsius  # or fahrenheit
+
+# Notification channels
+notifications:
+  telegram:
+    enabled: false
+    bot_token: ""  # Set via environment: TELEGRAM_BOT_TOKEN
+    chat_id: ""     # Set via environment: TELEGRAM_CHAT_ID
+  discord:
+    enabled: false
+    webhook_url: ""  # Set via environment: DISCORD_WEBHOOK_URL
+  webhook:
+    enabled: false
+    url: ""          # Set via environment: ALERT_WEBHOOK_URL
+    method: POST
+    headers:
+      Content-Type: application/json
+
+# Actions on threshold breach
+actions:
+  on_high_warning:
+    - "Send warning notification to all enabled channels"
+    - "Log event to local storage"
+  on_high_critical:
+    - "Send critical alert to all enabled channels"
+    - "Log event with priority=high"
+    - "Optional: trigger cooling relay if configured"
+  on_low_warning:
+    - "Send warning notification to all enabled channels"
+    - "Log event to local storage"
+  on_low_critical:
+    - "Send critical alert to all enabled channels"
+    - "Log event with priority=high"
+    - "Optional: trigger heating relay if configured"
+  on_rate_of_change_warning:
+    - "Send rapid-change warning to all enabled channels"
+    - "Log event with diagnostic data"
+  on_rate_of_change_critical:
+    - "Send rapid-change critical alert to all enabled channels"
+    - "Log event with priority=high"
+    - "Optional: trigger emergency shutdown if configured"
+
+# Configuration overrides (per-deployment)
+config:
+  sensor_id: "default"
+  polling_interval: 300  # seconds
+  cooldown_period: 600   # minimum seconds between alerts of same level
+  retry_count: 3         # retry failed notifications
+  retry_delay: 10        # seconds between retries
