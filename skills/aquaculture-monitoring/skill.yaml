@@ -1,0 +1,359 @@
+name: aquaculture-monitoring
+version: 1.0.0
+description: PicClaw skill for pond water-quality monitoring, aerator control, daily reporting, and memory-based trend learning.
+agent: picclaw
+category: agriculture
+tags:
+  - aquaculture
+  - pond-monitoring
+  - water-quality
+  - dissolved-oxygen
+  - aerator-control
+
+compatible_agents:
+  - picclaw
+
+triggers:
+  - name: water_quality_poll
+    cron: "*/10 * * * *"
+    description: Read pond sensors every 10 minutes and evaluate safety rules.
+  - name: dawn_baseline
+    cron: "0 6 * * *"
+    description: Capture the low-oxygen morning baseline and compare it with learned overnight trends.
+  - name: evening_risk_check
+    cron: "0 18 * * *"
+    description: Check oxygen and temperature before the usual overnight dissolved oxygen drop.
+  - name: daily_report
+    cron: "55 23 * * *"
+    description: Generate a daily pond report before the local operating day closes.
+  - name: water_quality_event
+    event: sensor.water_quality
+    description: Evaluate incoming dissolved oxygen, pH, temperature, and supporting water-quality readings.
+  - name: feeding_event
+    event: feeding.completed
+    description: Record feeding events so later oxygen dips can be correlated with feed load.
+  - name: aerator_status_event
+    event: relay.aerator.status
+    description: Confirm aerator state after an automatic control decision.
+
+tools:
+  - read_sensor
+  - log_data
+  - send_alert
+  - control_relay
+  - read_memory
+  - write_memory
+  - generate_report
+  - schedule_task
+
+configuration:
+  pond_id: pond-01
+  timezone: local
+  operator_contact_group: pond-operators
+  alert_cooldown_minutes:
+    warning: 30
+    critical: 10
+    report: 1440
+  sensor_freshness_minutes:
+    dissolved_oxygen_mg_l: 15
+    ph: 30
+    water_temperature_c: 30
+    ammonia_mg_l: 120
+    nitrite_mg_l: 120
+    turbidity_ntu: 60
+    salinity_ppt: 120
+    water_level_cm: 30
+
+sensors:
+  dissolved_oxygen_mg_l:
+    unit: mg/L
+    aliases:
+      - do
+      - dissolved_oxygen
+    valid_range:
+      min: 0.0
+      max: 25.0
+    normal_range:
+      min: 5.5
+      max: 12.0
+  ph:
+    unit: pH
+    valid_range:
+      min: 0.0
+      max: 14.0
+    normal_range:
+      min: 6.8
+      max: 8.5
+  water_temperature_c:
+    unit: degC
+    aliases:
+      - temperature
+      - water_temp
+    valid_range:
+      min: 0.0
+      max: 45.0
+    normal_range:
+      min: 18.0
+      max: 30.0
+  ammonia_mg_l:
+    unit: mg/L
+    valid_range:
+      min: 0.0
+      max: 20.0
+    normal_range:
+      min: 0.0
+      max: 0.25
+  nitrite_mg_l:
+    unit: mg/L
+    valid_range:
+      min: 0.0
+      max: 10.0
+    normal_range:
+      min: 0.0
+      max: 0.5
+  turbidity_ntu:
+    unit: NTU
+    valid_range:
+      min: 0.0
+      max: 1000.0
+    normal_range:
+      min: 0.0
+      max: 80.0
+  salinity_ppt:
+    unit: ppt
+    valid_range:
+      min: 0.0
+      max: 45.0
+  water_level_cm:
+    unit: cm
+    valid_range:
+      min: 0.0
+      max: 500.0
+
+thresholds:
+  dissolved_oxygen_mg_l:
+    warning_low: 5.0
+    critical_low: 3.5
+    emergency_low: 3.0
+    recovery_target: 5.5
+    nighttime_warning_low: 5.5
+    nighttime_critical_low: 4.0
+    rapid_drop_mg_l_per_30_min:
+      warning: 1.0
+      critical: 1.8
+  ph:
+    warning_low: 6.8
+    critical_low: 6.5
+    warning_high: 8.5
+    critical_high: 9.0
+    rapid_change_per_hour:
+      warning: 0.4
+      critical: 0.7
+  water_temperature_c:
+    warning_low: 18.0
+    critical_low: 15.0
+    warning_high: 30.0
+    critical_high: 34.0
+    rapid_change_c_per_hour:
+      warning: 3.0
+      critical: 5.0
+  ammonia_mg_l:
+    warning_high: 0.25
+    critical_high: 0.5
+  nitrite_mg_l:
+    warning_high: 0.5
+    critical_high: 1.0
+  turbidity_ntu:
+    warning_high: 80.0
+    critical_high: 150.0
+  water_level_cm:
+    warning_low_delta_from_baseline: -15.0
+    critical_low_delta_from_baseline: -30.0
+
+aerator_control:
+  relay:
+    name: aerator_main
+    channel: 1
+    verify_after_seconds: 10
+  modes:
+    standby:
+      relay_state: open
+      description: Aerator is off while readings are stable and no learned risk window is active.
+    pulse:
+      relay_state: pulse
+      duty_cycle_percent: 40
+      cycle_seconds: 300
+      description: Preventive aeration for learned overnight risk or mild oxygen decline.
+    continuous:
+      relay_state: closed
+      description: Continuous aeration for warning dissolved oxygen or heat-stress risk.
+    emergency:
+      relay_state: closed
+      description: Continuous aeration with urgent escalation for critical oxygen or multi-sensor danger.
+  decision_order:
+    - id: sensor_stale_or_invalid
+      when: "required oxygen, pH, or temperature data is stale or outside valid_range"
+      mode: keep_current
+      actions:
+        - "Do not switch the aerator off from stale or invalid data."
+        - "Re-read the failed sensor twice before declaring a fault."
+        - "Send a warning alert with sensor name, last timestamp, and current aerator state."
+    - id: emergency_oxygen
+      when: "dissolved_oxygen_mg_l <= thresholds.dissolved_oxygen_mg_l.emergency_low"
+      mode: emergency
+      actions:
+        - "Close aerator_main relay immediately."
+        - "Send critical alert to every configured channel."
+        - "Schedule a 10-minute oxygen recheck until recovery_target is reached."
+        - "Escalate if dissolved oxygen does not rise after 30 minutes."
+    - id: critical_oxygen_or_nighttime_risk
+      when: "dissolved_oxygen_mg_l <= critical_low or nighttime dissolved_oxygen_mg_l <= nighttime_critical_low"
+      mode: emergency
+      actions:
+        - "Run aerator continuously."
+        - "Log the event as a candidate overnight oxygen trough."
+        - "Include current pH and water temperature in the alert."
+    - id: oxygen_warning_or_rapid_drop
+      when: "dissolved_oxygen_mg_l <= warning_low or oxygen drop over 30 minutes exceeds warning rapid_drop"
+      mode: continuous
+      actions:
+        - "Run aerator continuously until oxygen reaches recovery_target."
+        - "Recheck oxygen every 10 minutes."
+        - "Record recovery time for trend learning."
+    - id: heat_stress_prevention
+      when: "water_temperature_c >= warning_high and learned trend predicts oxygen drop"
+      mode: pulse
+      actions:
+        - "Start preventive pulse aeration."
+        - "Track whether the oxygen drop was avoided."
+    - id: learned_night_trough
+      when: "memory predicts overnight oxygen risk in the next 60 minutes"
+      mode: pulse
+      actions:
+        - "Pulse aerator 30 minutes before the predicted trough."
+        - "Do not reduce hard oxygen thresholds."
+    - id: stable_recovery
+      when: "dissolved_oxygen_mg_l >= recovery_target and pH and temperature are back in normal_range"
+      mode: standby
+      actions:
+        - "Return aerator to standby only after a verified relay status event."
+        - "Write final readings and recovery duration to the daily note."
+  safety_constraints:
+    - "Never disable the aerator during low dissolved oxygen, stale oxygen readings, or manual override."
+    - "Never apply chemical dosing automatically; recommend human inspection instead."
+    - "Do not let memory-learned behavior suppress critical alerts or hard thresholds."
+    - "If relay verification fails, keep the current command active and alert the operator."
+    - "If aerator runtime exceeds 180 minutes outside critical oxygen, request equipment inspection."
+
+memory_learning:
+  enabled: true
+  stores:
+    long_term_summary: memory/MEMORY.md
+    daily_notes: memory/YYYYMM/YYYYMMDD.md
+    trend_key: aquaculture.ponds.{{pond_id}}.trends
+  rolling_windows:
+    short_term_hours: 24
+    medium_term_days: 7
+    comparison_days: 30
+  features:
+    - dawn_oxygen_minimum
+    - overnight_oxygen_drop_rate
+    - heat_to_oxygen_lag_minutes
+    - pH_drift_direction
+    - ammonia_or_nitrite_spike
+    - feeding_to_oxygen_drop_correlation
+    - aerator_recovery_minutes
+    - sensor_fault_frequency
+  learning_rules:
+    - id: recurring_overnight_trough
+      pattern: "oxygen falls below warning_low within the same two-hour night window on 3 of the last 5 nights"
+      action: "store predicted risk window and recommend pulse aeration 30 minutes before it starts"
+    - id: heat_related_oxygen_drop
+      pattern: "temperature above warning_high is followed by oxygen drop greater than 1.0 mg/L within 60 minutes"
+      action: "store heat-stress correlation and pre-warn during hot evenings"
+    - id: feeding_related_oxygen_drop
+      pattern: "oxygen drop greater than 0.8 mg/L occurs within 120 minutes of feeding on 3 recent feeding events"
+      action: "recommend smaller feed portions or earlier aeration before feed"
+    - id: slow_aerator_recovery
+      pattern: "oxygen recovery to recovery_target takes longer than 60 minutes on 2 consecutive incidents"
+      action: "recommend aerator inspection and log reduced recovery confidence"
+    - id: pH_drift
+      pattern: "daily average pH moves toward a critical boundary for 3 consecutive days"
+      action: "recommend water chemistry inspection in the daily report"
+  confidence:
+    initial: 0.60
+    increase_on_confirmed_prediction: 0.08
+    decrease_on_false_prediction: 0.05
+    promote_threshold: 0.80
+
+alerts:
+  channels:
+    - telegram
+    - discord
+    - webhook
+  severity_templates:
+    warning: "Pond {{pond_id}} warning: {{parameter}}={{value}} {{unit}}. Action: {{action}}."
+    critical: "Pond {{pond_id}} critical: {{parameter}}={{value}} {{unit}}. Aerator mode={{aerator_mode}}. Inspect immediately."
+    report: "Pond {{pond_id}} daily aquaculture report ready: {{report_path}}."
+  escalation:
+    critical_repeat_minutes: 30
+    unresolved_sensor_fault_minutes: 45
+    recipients:
+      - pond_manager
+      - maintenance_lead
+
+daily_report:
+  schedule: "55 23 * * *"
+  template: templates/daily-report.md
+  output_path: reports/aquaculture/{{pond_id}}/{{date}}.md
+  include_sections:
+    - executive_summary
+    - sensor_min_max_average
+    - oxygen_risk_windows
+    - threshold_breaches
+    - aerator_runtime_and_verification
+    - feeding_correlation
+    - memory_learned_trends
+    - next_day_actions
+  metrics:
+    - min_dissolved_oxygen_mg_l
+    - dawn_dissolved_oxygen_mg_l
+    - average_dissolved_oxygen_mg_l
+    - min_ph
+    - max_ph
+    - max_water_temperature_c
+    - ammonia_peak_mg_l
+    - nitrite_peak_mg_l
+    - aerator_runtime_minutes
+    - warning_count
+    - critical_count
+    - recovery_events
+  on_success:
+    - "Write report path and top risks to memory."
+    - "Send report notification to the operator contact group."
+  on_failure:
+    - "Send warning alert with missing sensor, storage, or template details."
+    - "Log failure details and retry once within 15 minutes."
+
+actions:
+  on_sensor_reading:
+    - "Validate required readings for freshness and valid_range."
+    - "Compare readings against thresholds and rolling trend windows."
+    - "Apply aerator_control decision_order from top to bottom."
+    - "Log reading, selected mode, relay verification, and alert decision."
+  on_warning:
+    - "Send warning alert unless cooldown is active."
+    - "Increase sampling cadence to every 10 minutes until recovery."
+    - "Append breach details to the daily note."
+  on_critical:
+    - "Set aerator mode to emergency when oxygen is critical."
+    - "Send critical alert to all configured channels."
+    - "Schedule repeated checks until readings recover or operator acknowledges."
+  on_feeding_completed:
+    - "Log feed amount, feed type, and pond_id."
+    - "Watch oxygen for 120 minutes after feeding."
+    - "Update feeding_to_oxygen_drop_correlation in memory when enough samples exist."
+  on_daily_report:
+    - "Generate markdown report from the template."
+    - "Write trend summary to long-term memory."
+    - "Send report notification."
