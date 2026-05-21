@@ -48,6 +48,7 @@ actions:
 | **Security** | motion-detect, door-sensor, camera-patrol |
 | **Agriculture** | soil-moisture, greenhouse-climate, irrigation-control |
 | **Industrial** | vibration-analysis, predictive-maintenance, energy-audit |
+| **Compliance** | cold-chain-compliance, gsp-haccp-reporting, audit-log-export |
 | **Home** | elder-care, pet-monitor, plant-watering |
 | **DevOps** | server-health, log-watcher, deploy-notifier |
 | **Communication** | telegram-bot, discord-relay, email-digest |
@@ -73,6 +74,12 @@ moltclaw fleet skill install --node edge-01 temperature-monitor
 3. Add `skill.yaml` with the skill definition
 4. Add any supporting files (drivers, scripts, templates)
 5. Submit a Pull Request
+
+## Available Skills
+
+| Skill | Description |
+|-------|-------------|
+| `cold-chain-compliance` | GSP/HACCP-ready CSV/PDF exports, tamper-evident audit logs, and daily cold-chain reports |
 
 See the [Skill Development Guide](docs/SKILL-DEVELOPMENT.md) for detailed instructions.
 
