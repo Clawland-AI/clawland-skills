@@ -1,0 +1,264 @@
+name: temperature-alert
+version: 1.0.0
+description: Monitor temperature sensors and send alerts when thresholds are exceeded
+author: unsiqasik
+license: MIT
+
+# Compatible agents
+agents:
+  - picclaw
+  - nanoclaw
+  - microclaw
+  - moltclaw
+  - any
+
+# Triggers define when the skill runs
+triggers:
+  - cron: "*/5 * * * *"        # Every 5 minutes
+  - event: "sensor.temperature" # On temperature sensor reading
+  - event: "sensor.humidity"    # On humidity sensor reading (for heat index)
+
+# Tools the skill needs access to
+tools:
+  - read_sensor
+  - send_notification
+  - log_data
+  - get_weather_data
+
+# Configuration schema
+config:
+  type: object
+  required:
+    - sensors
+    - thresholds
+  properties:
+    sensors:
+      type: array
+      description: List of temperature sensors to monitor
+      items:
+        type: object
+        required:
+          - id
+          - name
+        properties:
+          id:
+            type: string
+            description: Unique sensor identifier
+          name:
+            type: string
+            description: Human-readable sensor name
+          location:
+            type: string
+            description: Physical location of the sensor
+          unit:
+            type: string
+            enum: [celsius, fahrenheit, kelvin]
+            default: celsius
+    
+    thresholds:
+      type: object
+      description: Temperature thresholds for alerts
+      properties:
+        low_warning:
+          type: number
+          description: Low temperature warning threshold
+        low_critical:
+          type: number
+          description: Low temperature critical threshold
+        high_warning:
+          type: number
+          description: High temperature warning threshold
+        high_critical:
+          type: number
+          description: High temperature critical threshold
+        rate_of_change:
+          type: number
+          description: Maximum rate of change (degrees per minute)
+          default: 5.0
+    
+    notifications:
+      type: object
+      description: Notification channel configuration
+      properties:
+        telegram:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              default: false
+            bot_token:
+              type: string
+              description: Telegram bot token
+            chat_id:
+              type: string
+              description: Telegram chat ID
+        
+        discord:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              default: false
+            webhook_url:
+              type: string
+              description: Discord webhook URL
+        
+        webhook:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              default: false
+            url:
+              type: string
+              description: Custom webhook URL
+            method:
+              type: string
+              enum: [POST, PUT]
+              default: POST
+            headers:
+              type: object
+              description: Custom headers for webhook requests
+        
+        email:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              default: false
+            recipients:
+              type: array
+              items:
+                type: string
+              description: Email recipients
+    
+    logging:
+      type: object
+      description: Logging configuration
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        level:
+          type: string
+          enum: [debug, info, warning, error]
+          default: info
+        retention_days:
+          type: number
+          default: 30
+          description: Number of days to retain logs
+
+# Actions define what happens on different events
+actions:
+  on_high_warning:
+    - send_notification:
+        level: warning
+        message: "⚠️ Temperature warning: {{sensor.name}} at {{sensor.location}} is {{temperature}}°{{unit}} (threshold: {{thresholds.high_warning}}°{{unit}})"
+    - log_data:
+        level: warning
+        data:
+          event: high_warning
+          sensor: "{{sensor.id}}"
+          temperature: "{{temperature}}"
+          threshold: "{{thresholds.high_warning}}"
+
+  on_high_critical:
+    - send_notification:
+        level: critical
+        message: "🚨 CRITICAL: Temperature at {{sensor.name}} ({{sensor.location}}) is {{temperature}}°{{unit}} (threshold: {{thresholds.high_critical}}°{{unit}})"
+    - log_data:
+        level: error
+        data:
+          event: high_critical
+          sensor: "{{sensor.id}}"
+          temperature: "{{temperature}}"
+          threshold: "{{thresholds.high_critical}}"
+    - execute:
+        command: "activate_cooling"
+        args:
+          sensor_id: "{{sensor.id}}"
+          target_temp: "{{thresholds.high_warning}}"
+
+  on_low_warning:
+    - send_notification:
+        level: warning
+        message: "⚠️ Low temperature warning: {{sensor.name}} at {{sensor.location}} is {{temperature}}°{{unit}} (threshold: {{thresholds.low_warning}}°{{unit}})"
+    - log_data:
+        level: warning
+        data:
+          event: low_warning
+          sensor: "{{sensor.id}}"
+          temperature: "{{temperature}}"
+          threshold: "{{thresholds.low_warning}}"
+
+  on_low_critical:
+    - send_notification:
+        level: critical
+        message: "🚨 CRITICAL: Low temperature at {{sensor.name}} ({{sensor.location}}) is {{temperature}}°{{unit}} (threshold: {{thresholds.low_critical}}°{{unit}})"
+    - log_data:
+        level: error
+        data:
+          event: low_critical
+          sensor: "{{sensor.id}}"
+          temperature: "{{temperature}}"
+          threshold: "{{thresholds.low_critical}}"
+    - execute:
+        command: "activate_heating"
+        args:
+          sensor_id: "{{sensor.id}}"
+          target_temp: "{{thresholds.low_warning}}"
+
+  on_rate_of_change:
+    - send_notification:
+        level: warning
+        message: "⚠️ Rapid temperature change detected at {{sensor.name}} ({{sensor.location}}): {{rate}}°{{unit}}/min (threshold: {{thresholds.rate_of_change}}°{{unit}}/min)"
+    - log_data:
+        level: warning
+        data:
+          event: rate_of_change
+          sensor: "{{sensor.id}}"
+          rate: "{{rate}}"
+          threshold: "{{thresholds.rate_of_change}}"
+
+  on_sensor_offline:
+    - send_notification:
+        level: error
+        message: "🔴 Sensor {{sensor.name}} ({{sensor.id}}) is offline"
+    - log_data:
+        level: error
+        data:
+          event: sensor_offline
+          sensor: "{{sensor.id}}"
+
+  on_sensor_recovered:
+    - send_notification:
+        level: info
+        message: "🟢 Sensor {{sensor.name}} ({{sensor.id}}) is back online"
+    - log_data:
+        level: info
+        data:
+          event: sensor_recovered
+          sensor: "{{sensor.id}}"
+
+# Health check configuration
+health_check:
+  interval: 60  # seconds
+  timeout: 10   # seconds
+  retries: 3
+
+# Metrics to collect
+metrics:
+  - name: temperature
+    type: gauge
+    description: Current temperature reading
+    labels: [sensor_id, sensor_name, location]
+  
+  - name: alerts_total
+    type: counter
+    description: Total number of alerts sent
+    labels: [level, event_type]
+  
+  - name: sensor_status
+    type: gauge
+    description: Sensor online status (1=online, 0=offline)
+    labels: [sensor_id, sensor_name]
