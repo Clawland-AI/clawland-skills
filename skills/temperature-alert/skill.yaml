@@ -1,0 +1,51 @@
+name: temperature-alert
+version: 1.0.0
+description: Monitor temperature sensors and alert on threshold violations across multiple channels
+agent: picclaw  # compatible with picclaw, nanoclaw, microclaw
+
+triggers:
+  - cron: "*/5 * * * *"        # Every 5 minutes
+  - event: "sensor.temperature" # On sensor reading
+
+tools:
+  - read_sensor
+  - send_alert
+  - log_data
+  - control_actuator
+
+thresholds:
+  high:
+    warning: 35.0
+    critical: 45.0
+  low:
+    warning: 5.0
+    critical: 0.0
+  rate_of_change: 5.0  # degrees per minute — triggers on rapid changes
+
+notifications:
+  channels:
+    - type: telegram
+      enabled: true
+      config:
+        bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+    - type: discord
+      enabled: false
+      config:
+        webhook_url: "${DISCORD_WEBHOOK_URL}"
+    - type: webhook
+      enabled: false
+      config:
+        url: "${CUSTOM_WEBHOOK_URL}"
+        method: POST
+
+actions:
+  on_warning: "Send alert to configured notification channels"
+  on_critical: "Send urgent alert + activate cooling/heating relay + escalate"
+  on_sensor_offline: "Send sensor offline notification after 3 consecutive failures"
+  on_recovery: "Send recovery notification when sensor comes back online"
+
+metrics:
+  enabled: true
+  export_format: prometheus  # prometheus, json, csv
+  retention_days: 30
