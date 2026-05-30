@@ -1,0 +1,189 @@
+name: aquaculture-monitoring
+version: 1.0.0
+description: Pond water-quality monitoring with aerator control, alerts, daily reports, and trend memory.
+category: agriculture
+license: MIT
+maintainers:
+  - Clawland-AI/community
+
+agents:
+  - picclaw
+  - nanoclaw
+  - microclaw
+
+triggers:
+  - event: sensor.water.dissolved_oxygen
+  - event: sensor.water.ph
+  - event: sensor.water.temperature
+  - cron: "*/5 * * * *"
+    description: Poll water-quality sensors every five minutes.
+  - cron: "0 6 * * *"
+    description: Generate a daily pond health report each morning.
+
+inputs:
+  dissolved_oxygen_mg_l:
+    type: number
+    unit: mg/L
+    required: true
+  ph:
+    type: number
+    unit: pH
+    required: true
+  water_temperature_c:
+    type: number
+    unit: celsius
+    required: true
+  pond_id:
+    type: string
+    default: pond-01
+  sensor_id:
+    type: string
+    default: water-node-01
+
+configuration:
+  thresholds:
+    dissolved_oxygen_mg_l:
+      critical_low: 3.0
+      warning_low: 5.0
+      recovery_target: 6.0
+    ph:
+      critical_low: 6.2
+      warning_low: 6.5
+      warning_high: 8.5
+      critical_high: 9.0
+    water_temperature_c:
+      critical_low: 12.0
+      warning_low: 18.0
+      warning_high: 30.0
+      critical_high: 34.0
+  trend_window:
+    short_minutes: 30
+    daily_hours: 24
+    memory_days: 90
+  aerator:
+    relay: aerator-main
+    min_runtime_minutes: 15
+    cooldown_minutes: 5
+    emergency_runtime_minutes: 45
+  reports:
+    daily_time: "06:00"
+    include_hourly_summary: true
+    include_trend_notes: true
+  notifications:
+    telegram:
+      enabled: false
+      env_token: TELEGRAM_BOT_TOKEN
+      env_chat_id: TELEGRAM_CHAT_ID
+    discord:
+      enabled: false
+      env_webhook_url: DISCORD_WEBHOOK_URL
+    webhook:
+      enabled: false
+      env_url: AQUACULTURE_WEBHOOK_URL
+
+memory:
+  namespace: aquaculture-monitoring
+  retention_days: 90
+  features:
+    - rolling_average_30m
+    - rolling_average_24h
+    - min_max_24h
+    - consecutive_warning_count
+    - aerator_runtime_minutes
+    - recovery_time_after_aeration
+  trend_learning:
+    enabled: true
+    summary_prompt: >
+      Compare the last 24 hours of dissolved oxygen, pH, and temperature
+      against the previous seven days. Flag recurring low-oxygen windows,
+      temperature-driven pH drift, slow aerator recovery, and sensor anomalies.
+
+tools:
+  - read_sensor
+  - write_relay
+  - send_alert
+  - memory_read
+  - memory_write
+  - render_template
+
+actions:
+  on_critical_low_oxygen:
+    condition: dissolved_oxygen_mg_l < configuration.thresholds.dissolved_oxygen_mg_l.critical_low
+    severity: critical
+    steps:
+      - tool: write_relay
+        args:
+          relay: "{{ configuration.aerator.relay }}"
+          state: on
+          duration_minutes: "{{ configuration.aerator.emergency_runtime_minutes }}"
+      - tool: send_alert
+        args:
+          title: "Critical low dissolved oxygen"
+          message: "DO is {{ dissolved_oxygen_mg_l }} mg/L in {{ pond_id }}. Emergency aeration started."
+          channels: [telegram, discord, webhook]
+      - tool: memory_write
+        args:
+          key: "{{ pond_id }}.critical_events"
+          append: true
+          value:
+            type: low_oxygen
+            dissolved_oxygen_mg_l: "{{ dissolved_oxygen_mg_l }}"
+            action: emergency_aeration
+
+  on_warning_low_oxygen:
+    condition: dissolved_oxygen_mg_l < configuration.thresholds.dissolved_oxygen_mg_l.warning_low
+    severity: warning
+    steps:
+      - tool: write_relay
+        args:
+          relay: "{{ configuration.aerator.relay }}"
+          state: on
+          duration_minutes: "{{ configuration.aerator.min_runtime_minutes }}"
+      - tool: send_alert
+        args:
+          title: "Low dissolved oxygen"
+          message: "DO is {{ dissolved_oxygen_mg_l }} mg/L in {{ pond_id }}. Aerator started for {{ configuration.aerator.min_runtime_minutes }} minutes."
+          channels: [telegram, discord, webhook]
+
+  on_ph_out_of_range:
+    condition: ph < configuration.thresholds.ph.warning_low or ph > configuration.thresholds.ph.warning_high
+    severity: warning
+    steps:
+      - tool: send_alert
+        args:
+          title: "Pond pH out of range"
+          message: "pH is {{ ph }} in {{ pond_id }}. Check alkalinity, runoff, feed load, and recent aeration."
+          channels: [telegram, discord, webhook]
+      - tool: memory_write
+        args:
+          key: "{{ pond_id }}.ph_events"
+          append: true
+          value:
+            ph: "{{ ph }}"
+            water_temperature_c: "{{ water_temperature_c }}"
+
+  on_temperature_out_of_range:
+    condition: water_temperature_c < configuration.thresholds.water_temperature_c.warning_low or water_temperature_c > configuration.thresholds.water_temperature_c.warning_high
+    severity: warning
+    steps:
+      - tool: send_alert
+        args:
+          title: "Pond temperature out of range"
+          message: "Water temperature is {{ water_temperature_c }} C in {{ pond_id }}. Watch feeding and oxygen demand."
+          channels: [telegram, discord, webhook]
+
+  on_daily_report:
+    trigger: "0 6 * * *"
+    severity: info
+    steps:
+      - tool: memory_read
+        args:
+          namespace: aquaculture-monitoring
+          lookback_hours: 24
+      - tool: render_template
+        args:
+          template: templates/daily-report.md
+      - tool: send_alert
+        args:
+          title: "Daily aquaculture report"
+          channels: [telegram, discord, webhook]

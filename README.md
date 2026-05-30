@@ -46,7 +46,7 @@ actions:
 |----------|----------|
 | **Monitoring** | temperature-monitor, humidity-watch, power-usage |
 | **Security** | motion-detect, door-sensor, camera-patrol |
-| **Agriculture** | soil-moisture, greenhouse-climate, irrigation-control |
+| **Agriculture** | soil-moisture, greenhouse-climate, irrigation-control, aquaculture-monitoring |
 | **Industrial** | vibration-analysis, predictive-maintenance, energy-audit |
 | **Home** | elder-care, pet-monitor, plant-watering |
 | **DevOps** | server-health, log-watcher, deploy-notifier |
@@ -79,6 +79,12 @@ See the [Skill Development Guide](docs/SKILL-DEVELOPMENT.md) for detailed instru
 ## Status
 
 🚧 **Pre-Alpha** — Skill format specification in design. Looking for contributors!
+
+## Available Skills
+
+| Skill | Category | Purpose |
+| --- | --- | --- |
+| `aquaculture-monitoring` | Agriculture | Monitor pond dissolved oxygen, pH, and temperature; control aerators; send alerts; generate daily reports. |
 
 ## Contributing
 
