@@ -1,0 +1,8 @@
+{
+  "pond_id": "pond-01",
+  "sensor_id": "water-node-01",
+  "dissolved_oxygen_mg_l": 4.6,
+  "ph": 7.4,
+  "water_temperature_c": 28.2,
+  "timestamp": "2026-05-30T06:10:00Z"
+}
