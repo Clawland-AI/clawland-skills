@@ -76,6 +76,12 @@ moltclaw fleet skill install --node edge-01 temperature-monitor
 
 See the [Skill Development Guide](docs/SKILL-DEVELOPMENT.md) for detailed instructions.
 
+## Available Skills
+
+| Skill | Category | Description |
+|-------|----------|-------------|
+| `aquaculture-monitoring` | Agriculture | Pond and tank monitoring with DO/pH/temperature thresholds, aerator control, daily reports, and Memory trend learning. |
+
 ## Status
 
 🚧 **Pre-Alpha** — Skill format specification in design. Looking for contributors!
