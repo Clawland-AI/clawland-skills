@@ -55,6 +55,10 @@ At 06:00 local time, the skill renders a daily report with:
 
 The report can be emitted as Markdown and JSON, then sent through Telegram or webhook.
 
+Template: `reports/daily-pond-health.md`
+
+Sample readings: `examples/sample-readings.jsonl`
+
 ## Required Environment Variables
 
 Set only the channels you plan to use.
@@ -81,6 +85,16 @@ The manifest accepts common aliases:
 - Test the aerator relay manually before enabling automatic mode.
 - Simulate a low-oxygen reading and confirm alert delivery.
 - Verify the daily report renders after sample data is logged.
+
+## Local Validation
+
+From the repository root:
+
+```bash
+node scripts/validate-aquaculture-monitoring.mjs
+```
+
+This checks that the skill package has the expected files, manifest sections, channel configuration, and parseable sample readings.
 
 ## Bounty Reference
 

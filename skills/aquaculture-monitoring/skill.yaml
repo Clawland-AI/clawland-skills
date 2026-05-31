@@ -255,6 +255,11 @@ reports:
             - telegram
             - webhook
           message: "Daily aquaculture monitoring report is ready."
+    files:
+      markdown_template: reports/daily-pond-health.md
+
+examples:
+  sample_readings: examples/sample-readings.jsonl
 
 notifications:
   telegram:
