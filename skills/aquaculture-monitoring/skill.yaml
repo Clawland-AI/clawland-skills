@@ -1,0 +1,176 @@
+name: aquaculture-monitoring
+version: 1.0.0
+description: Monitor aquaculture water quality and alert operators on unsafe pond or tank conditions.
+agent: picclaw
+category: agriculture
+
+triggers:
+  - event: sensor.aquaculture.water_quality
+  - cron: "*/10 * * * *"
+
+field_mapping:
+  pond_id: pond_id
+  timestamp: timestamp
+  dissolved_oxygen: dissolved_oxygen_mg_l
+  water_temperature: water_temperature_c
+  ph: ph
+  salinity: salinity_ppt
+  turbidity: turbidity_ntu
+  ammonia: ammonia_mg_l
+  water_level: water_level_cm
+
+thresholds:
+  dissolved_oxygen_mg_l:
+    warning_low: 5.0
+    critical_low: 3.5
+  water_temperature_c:
+    warning_low: 20.0
+    warning_high: 31.0
+    critical_low: 16.0
+    critical_high: 35.0
+  ph:
+    warning_low: 6.8
+    warning_high: 8.5
+    critical_low: 6.2
+    critical_high: 9.0
+  salinity_ppt:
+    warning_low: 2.0
+    warning_high: 35.0
+  turbidity_ntu:
+    warning_high: 50.0
+    critical_high: 100.0
+  ammonia_mg_l:
+    warning_high: 0.05
+    critical_high: 0.2
+  water_level_cm:
+    warning_low: 80.0
+    critical_low: 50.0
+  sensor_freshness_minutes:
+    warning: 20
+    critical: 45
+
+rules:
+  - id: oxygen-critical-low
+    when: dissolved_oxygen_mg_l < thresholds.dissolved_oxygen_mg_l.critical_low
+    severity: critical
+    message: Dissolved oxygen is critically low. Start aeration and inspect pond immediately.
+    actions:
+      - log_event
+      - send_operator_alert
+      - activate_aeration_relay
+      - escalate_to_cloud
+
+  - id: oxygen-warning-low
+    when: dissolved_oxygen_mg_l < thresholds.dissolved_oxygen_mg_l.warning_low
+    severity: warning
+    message: Dissolved oxygen is below the warning threshold.
+    actions:
+      - log_event
+      - send_operator_alert
+
+  - id: temperature-out-of-range
+    when: water_temperature_c < thresholds.water_temperature_c.warning_low or water_temperature_c > thresholds.water_temperature_c.warning_high
+    severity: warning
+    message: Water temperature is outside the normal operating range.
+    actions:
+      - log_event
+      - send_operator_alert
+
+  - id: ph-critical
+    when: ph < thresholds.ph.critical_low or ph > thresholds.ph.critical_high
+    severity: critical
+    message: Water pH is critically outside the safe range.
+    actions:
+      - log_event
+      - send_operator_alert
+      - escalate_to_cloud
+
+  - id: ammonia-high
+    when: ammonia_mg_l > thresholds.ammonia_mg_l.warning_high
+    severity: warning
+    message: Ammonia is above the warning threshold.
+    actions:
+      - log_event
+      - send_operator_alert
+
+  - id: ammonia-critical
+    when: ammonia_mg_l > thresholds.ammonia_mg_l.critical_high
+    severity: critical
+    message: Ammonia is critically high. Inspect filtration, feeding, and water exchange immediately.
+    actions:
+      - log_event
+      - send_operator_alert
+      - escalate_to_cloud
+
+  - id: turbidity-high
+    when: turbidity_ntu > thresholds.turbidity_ntu.warning_high
+    severity: warning
+    message: Turbidity is elevated and may indicate algae bloom, sediment, or feed waste.
+    actions:
+      - log_event
+      - send_operator_alert
+
+  - id: water-level-low
+    when: water_level_cm < thresholds.water_level_cm.warning_low
+    severity: warning
+    message: Water level is below the warning threshold.
+    actions:
+      - log_event
+      - send_operator_alert
+
+  - id: stale-reading
+    when: minutes_since(timestamp) > thresholds.sensor_freshness_minutes.warning
+    severity: warning
+    message: Water-quality sensor data is stale.
+    actions:
+      - log_event
+      - send_operator_alert
+
+actions:
+  log_event:
+    type: local_log
+    path: /var/log/clawland/aquaculture-monitoring.log
+
+  send_operator_alert:
+    type: notification
+    channels:
+      - telegram
+      - email
+    template: "[{{ severity }}] {{ pond_id }}: {{ message }}"
+
+  activate_aeration_relay:
+    type: gpio_relay
+    enabled: false
+    relay_name: aeration
+    duration_minutes: 15
+
+  escalate_to_cloud:
+    type: webhook
+    enabled: true
+    endpoint_env: CLAWLAND_ALERT_WEBHOOK_URL
+
+outputs:
+  metrics:
+    - dissolved_oxygen_mg_l
+    - water_temperature_c
+    - ph
+    - salinity_ppt
+    - turbidity_ntu
+    - ammonia_mg_l
+    - water_level_cm
+  events:
+    - aquaculture.warning
+    - aquaculture.critical
+    - aquaculture.sensor_stale
+
+metadata:
+  domain: aquaculture
+  deployment_targets:
+    - pond
+    - tank
+    - cage
+    - recirculating-aquaculture-system
+  notes:
+    - Thresholds are defaults and should be tuned per species, climate, and sensor calibration.
+    - Relay actions are disabled by default to avoid unsafe automation without site-specific wiring.
+

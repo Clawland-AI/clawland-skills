@@ -47,6 +47,7 @@ actions:
 | **Monitoring** | temperature-monitor, humidity-watch, power-usage |
 | **Security** | motion-detect, door-sensor, camera-patrol |
 | **Agriculture** | soil-moisture, greenhouse-climate, irrigation-control |
+| **Aquaculture** | aquaculture-monitoring, pond-health, water-quality |
 | **Industrial** | vibration-analysis, predictive-maintenance, energy-audit |
 | **Home** | elder-care, pet-monitor, plant-watering |
 | **DevOps** | server-health, log-watcher, deploy-notifier |
