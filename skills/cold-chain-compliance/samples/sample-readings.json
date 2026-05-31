@@ -1,0 +1,51 @@
+[
+  {
+    "id": "cold-ok-001",
+    "profile": "chilled_food",
+    "shipment_id": "SHIP-1001",
+    "lot_id": "LOT-A",
+    "timestamp": "2026-05-31T08:00:00Z",
+    "temperature_c": 3.8,
+    "humidity_percent": 72,
+    "door_open": false,
+    "power_ok": true,
+    "expected_state": "normal"
+  },
+  {
+    "id": "cold-warning-001",
+    "profile": "chilled_food",
+    "shipment_id": "SHIP-1001",
+    "lot_id": "LOT-A",
+    "timestamp": "2026-05-31T09:05:00Z",
+    "temperature_c": 6.4,
+    "humidity_percent": 78,
+    "door_open": false,
+    "power_ok": true,
+    "expected_state": "warning"
+  },
+  {
+    "id": "cold-critical-001",
+    "profile": "chilled_food",
+    "shipment_id": "SHIP-1001",
+    "lot_id": "LOT-A",
+    "timestamp": "2026-05-31T09:20:00Z",
+    "temperature_c": 8.7,
+    "humidity_percent": 93,
+    "door_open": true,
+    "power_ok": true,
+    "expected_state": "critical"
+  },
+  {
+    "id": "pharma-critical-001",
+    "profile": "pharmaceuticals_2_8c",
+    "shipment_id": "SHIP-2001",
+    "lot_id": "VACCINE-B",
+    "timestamp": "2026-05-31T10:10:00Z",
+    "temperature_c": 9.2,
+    "humidity_percent": 70,
+    "door_open": false,
+    "power_ok": true,
+    "excursion_minutes": 7,
+    "expected_state": "critical"
+  }
+]
