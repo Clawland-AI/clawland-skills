@@ -1,0 +1,363 @@
+name: cold-chain-compliance
+version: 1.0.0
+description: Monitor refrigerated storage and transport lanes, preserve audit trails, and produce GSP/HACCP-ready cold chain compliance reports.
+category: industrial
+license: MIT
+
+agents:
+  - picclaw
+  - nanoclaw
+  - microclaw
+
+metadata:
+  maintainer: Clawland community
+  maturity: reference
+  bounty_issue: https://github.com/Clawland-AI/clawland-skills/issues/24
+  use_cases:
+    - refrigerated-warehouse
+    - vaccine-and-pharma-logistics
+    - food-cold-chain
+    - refrigerated-transport
+
+triggers:
+  - event: sensor.temperature
+  - event: sensor.humidity
+  - event: door.opened
+  - event: shipment.received
+  - event: shipment.dispatched
+  - cron: "*/5 * * * *"
+    description: Poll cold-chain sensors every 5 minutes.
+  - cron: "0 7 * * *"
+    description: Generate the daily compliance report at 07:00 local time.
+  - cron: "0 0 * * 1"
+    description: Generate the weekly audit summary every Monday.
+
+sensor_map:
+  air_temperature:
+    unit: celsius
+    aliases:
+      - temperature
+      - temp_c
+      - cargo_temperature
+    sample_window: 5m
+  product_temperature:
+    unit: celsius
+    aliases:
+      - probe_temperature
+      - product_temp_c
+      - core_temperature
+    sample_window: 5m
+  relative_humidity:
+    unit: percent
+    aliases:
+      - humidity
+      - rh
+    sample_window: 10m
+  door_state:
+    unit: state
+    aliases:
+      - door
+      - dock_door
+      - trailer_door
+    sample_window: 1m
+
+profiles:
+  chilled_food:
+    temperature_min: 0.0
+    temperature_max: 5.0
+    humidity_min: 65
+    humidity_max: 90
+    max_door_open_duration: 3m
+  frozen_food:
+    temperature_min: -25.0
+    temperature_max: -18.0
+    humidity_min: 30
+    humidity_max: 75
+    max_door_open_duration: 2m
+  pharma_2_8c:
+    temperature_min: 2.0
+    temperature_max: 8.0
+    humidity_min: 35
+    humidity_max: 65
+    max_door_open_duration: 90s
+
+thresholds:
+  temperature_excursion:
+    warning_grace_period: 10m
+    critical_grace_period: 20m
+    recovery_stable_for: 15m
+  humidity_excursion:
+    warning_grace_period: 20m
+    recovery_stable_for: 30m
+  sensor_health:
+    stale_after: 15m
+    drift_warning_celsius: 1.5
+    calibration_due_days: 30
+
+tools:
+  - read_sensor
+  - send_alert
+  - log_data
+  - write_memory
+  - read_memory
+  - render_report
+  - export_csv
+  - export_pdf
+  - hash_record
+
+state:
+  memory_namespace: cold_chain.compliance
+  retained_metrics_days: 90
+  audit_retention_days: 730
+  trend_windows:
+    short: 30m
+    daily: 24h
+    weekly: 7d
+
+audit_trail:
+  tamper_evident: true
+  hash_algorithm: sha256
+  chain_fields:
+    - previous_record_hash
+    - record_hash
+  required_fields:
+    - timestamp
+    - site_id
+    - asset_id
+    - lane_id
+    - product_category
+    - active_profile
+    - sensor_id
+    - reading_type
+    - reading_value
+    - unit
+    - operator_id
+    - custody_event
+    - corrective_action
+    - previous_record_hash
+    - record_hash
+
+rules:
+  - id: temperature-excursion-warning
+    severity: warning
+    when:
+      metric: air_temperature
+      operator: outside_profile
+      min_ref: profiles.active.temperature_min
+      max_ref: profiles.active.temperature_max
+      duration_ref: thresholds.temperature_excursion.warning_grace_period
+    actions:
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "Temperature is outside the allowed cold-chain band. Start excursion timer and inspect door/compressor status."
+      - log_data:
+          stream: audit_trail
+          custody_event: temperature_excursion_warning
+      - write_memory:
+          key: temperature_excursions
+          append: true
+  - id: temperature-excursion-critical
+    severity: critical
+    when:
+      metric: product_temperature
+      operator: outside_profile
+      min_ref: profiles.active.temperature_min
+      max_ref: profiles.active.temperature_max
+      duration_ref: thresholds.temperature_excursion.critical_grace_period
+    actions:
+      - send_alert:
+          channels:
+            - telegram
+            - discord
+            - webhook
+          priority: urgent
+          message: "Critical product temperature excursion. Quarantine affected lot and record corrective action."
+      - log_data:
+          stream: audit_trail
+          custody_event: temperature_excursion_critical
+      - write_memory:
+          key: quarantined_lots
+          append: true
+  - id: humidity-excursion
+    severity: warning
+    when:
+      metric: relative_humidity
+      operator: outside_profile
+      min_ref: profiles.active.humidity_min
+      max_ref: profiles.active.humidity_max
+      duration_ref: thresholds.humidity_excursion.warning_grace_period
+    actions:
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "Humidity is outside the configured profile. Inspect packaging, evaporator condition, and door sealing."
+      - log_data:
+          stream: audit_trail
+          custody_event: humidity_excursion
+  - id: door-open-too-long
+    severity: warning
+    when:
+      metric: door_state
+      operator: equals
+      value: open
+      duration_ref: profiles.active.max_door_open_duration
+    actions:
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "Cold-chain door has been open too long. Close door or log approved loading exception."
+      - log_data:
+          stream: audit_trail
+          custody_event: door_open_exception
+  - id: sensor-stale
+    severity: warning
+    when:
+      metric: sensor_last_seen
+      operator: ">"
+      value_ref: thresholds.sensor_health.stale_after
+    actions:
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "Cold-chain sensor data is stale. Check probe power, gateway connectivity, and calibration label."
+      - log_data:
+          stream: audit_trail
+          custody_event: sensor_stale
+
+compliance_workflows:
+  receiving_check:
+    required_steps:
+      - scan_shipment_id
+      - record_supplier_temperature
+      - record_receiver_temperature
+      - confirm_packaging_integrity
+      - accept_or_quarantine_lot
+  dispatch_check:
+    required_steps:
+      - confirm_precooled_vehicle
+      - record_loading_start_time
+      - record_loading_end_time
+      - verify_active_profile
+      - seal_trailer_or_container
+  excursion_resolution:
+    required_steps:
+      - identify_affected_lots
+      - record_duration_and_temperature_range
+      - assign_corrective_action_owner
+      - decide_release_or_quarantine
+      - attach_operator_signoff
+
+trend_learning:
+  enabled: true
+  memory_keys:
+    - temperature_excursion_frequency
+    - door_open_duration_daily
+    - compressor_recovery_time
+    - humidity_excursion_frequency
+    - sensor_stale_events
+  observations:
+    - metric: air_temperature
+      aggregate: max
+      window: daily
+    - metric: air_temperature
+      aggregate: min
+      window: daily
+    - metric: door_open_duration
+      aggregate: sum
+      window: daily
+    - metric: product_temperature
+      aggregate: excursion_count
+      window: weekly
+  insights:
+    - id: loading-window-risk
+      condition: "temperature excursions cluster during dispatch or receiving windows"
+      recommendation: "Shorten loading windows, pre-stage pallets, or use dock curtains."
+    - id: slow-recovery
+      condition: "temperature recovery time increases for three consecutive excursions"
+      recommendation: "Inspect compressor capacity, door seals, and evaporator icing."
+    - id: probe-reliability-risk
+      condition: "one sensor reports stale data repeatedly within seven days"
+      recommendation: "Replace probe battery, inspect wiring, and record calibration status."
+
+reports:
+  daily:
+    schedule_ref: triggers[6]
+    template: daily-cold-chain-compliance
+    include:
+      - temperature_excursions
+      - humidity_excursions
+      - door_open_exceptions
+      - sensor_health_events
+      - corrective_actions
+      - quarantined_lots
+      - audit_hash_summary
+    actions:
+      - render_report:
+          format:
+            - markdown
+            - csv
+            - pdf
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "Daily cold-chain compliance report is ready."
+    files:
+      markdown_template: reports/daily-cold-chain-compliance.md
+  weekly:
+    schedule_ref: triggers[7]
+    template: weekly-audit-summary
+    include:
+      - trend_learning_insights
+      - excursion_rate_by_site
+      - corrective_action_closure_rate
+      - calibration_due_list
+      - audit_trail_integrity_summary
+
+exports:
+  csv:
+    default_path: exports/cold-chain-audit.csv
+    include_header: true
+  pdf:
+    template: reports/daily-cold-chain-compliance.md
+    signature_fields:
+      - operator_id
+      - qa_reviewer
+      - release_decision
+
+examples:
+  sample_events: examples/sample-events.jsonl
+
+notifications:
+  telegram:
+    enabled: true
+    token_env: TELEGRAM_BOT_TOKEN
+    chat_id_env: TELEGRAM_CHAT_ID
+  discord:
+    enabled: true
+    webhook_env: DISCORD_WEBHOOK_URL
+  webhook:
+    enabled: true
+    url_env: COLD_CHAIN_WEBHOOK_URL
+
+safety:
+  require_manual_ack_for:
+    - temperature-excursion-critical
+    - sensor-stale
+  max_alerts_per_hour: 20
+  quarantine_on_missing_product_temperature: true
+  on_audit_hash_mismatch:
+    severity: critical
+    actions:
+      - send_alert:
+          channels:
+            - telegram
+            - discord
+            - webhook
+          priority: urgent
+          message: "Cold-chain audit hash mismatch detected. Stop automated release and inspect log integrity."
