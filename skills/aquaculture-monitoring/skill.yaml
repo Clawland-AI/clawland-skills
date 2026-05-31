@@ -1,0 +1,172 @@
+name: aquaculture-monitoring
+version: 1.0.0
+description: Monitor aquaculture water quality, protect feeding windows, and automate aeration decisions from PicClaw sensor readings.
+agent: picclaw
+category: agriculture
+priority: medium
+
+triggers:
+  - event: sensor.dissolved_oxygen
+  - event: sensor.ph
+  - event: sensor.water_temperature
+  - event: sensor.feeder
+  - cron: "*/5 * * * *"
+  - cron: "0 6 * * *"
+
+inputs:
+  sensors:
+    dissolved_oxygen_mg_l:
+      unit: mg/L
+      source: modbus.do_probe
+      warning_below: 5.5
+      critical_below: 4.5
+    ph:
+      unit: pH
+      source: analog.ph_probe
+      warning_low: 6.8
+      warning_high: 8.4
+      critical_low: 6.5
+      critical_high: 8.8
+    water_temperature_c:
+      unit: C
+      source: ds18b20.water_probe
+      warning_low: 18.0
+      warning_high: 30.0
+      critical_low: 15.0
+      critical_high: 33.0
+    turbidity_ntu:
+      unit: NTU
+      source: analog.turbidity
+      warning_high: 55
+      critical_high: 80
+    feeder_state:
+      unit: state
+      source: gpio.feeder_status
+  actuators:
+    aerator_relay:
+      type: relay
+      pin: relay.aerator
+      fail_safe: "on"
+    feeder_relay:
+      type: relay
+      pin: relay.feeder
+      fail_safe: "off"
+
+thresholds:
+  dissolved_oxygen:
+    warning_below_mg_l: 5.5
+    critical_below_mg_l: 4.5
+    recovery_mg_l: 6.2
+  ph:
+    warning_range: [6.8, 8.4]
+    critical_range: [6.5, 8.8]
+  water_temperature:
+    warning_range_c: [18.0, 30.0]
+    critical_range_c: [15.0, 33.0]
+  turbidity:
+    warning_above_ntu: 55
+    critical_above_ntu: 80
+
+rules:
+  - id: oxygen-critical-aeration
+    when:
+      all:
+        - sensor: dissolved_oxygen_mg_l
+          below: 4.5
+    actions:
+      - activate: aerator_relay
+      - notify:
+          severity: critical
+          message: "Dissolved oxygen is critical; aerator forced on."
+      - log_event: water_quality.oxygen_critical
+
+  - id: oxygen-warning-aeration
+    when:
+      all:
+        - sensor: dissolved_oxygen_mg_l
+          below: 5.5
+        - sensor: water_temperature_c
+          above: 26.0
+    actions:
+      - activate: aerator_relay
+      - notify:
+          severity: warning
+          message: "Dissolved oxygen is low during warm water conditions."
+      - log_event: water_quality.oxygen_warning
+
+  - id: feeding-guardrail
+    when:
+      any:
+        - sensor: dissolved_oxygen_mg_l
+          below: 5.5
+        - sensor: ph
+          outside: [6.8, 8.4]
+        - sensor: turbidity_ntu
+          above: 55
+    actions:
+      - deactivate: feeder_relay
+      - notify:
+          severity: warning
+          message: "Feeding paused until water quality returns to safe range."
+      - log_event: feeding.paused_by_water_quality
+
+  - id: daily-report
+    when:
+      cron: "0 6 * * *"
+    actions:
+      - generate_report:
+          template: daily-water-quality
+          include:
+            - dissolved_oxygen_mg_l
+            - ph
+            - water_temperature_c
+            - turbidity_ntu
+            - aerator_runtime_minutes
+            - feeding_pauses
+      - notify:
+          severity: info
+          message: "Daily aquaculture water-quality report is ready."
+
+memory:
+  namespace: aquaculture.monitoring
+  retention_days: 90
+  trend_learning:
+    enabled: true
+    features:
+      - dissolved_oxygen_mg_l
+      - ph
+      - water_temperature_c
+      - turbidity_ntu
+      - aerator_runtime_minutes
+    anomaly_detection:
+      window_hours: 24
+      z_score_threshold: 2.5
+    recommendations:
+      - predict overnight dissolved oxygen drops
+      - identify recurring pH drift after feeding
+      - summarize aerator runtime versus recovery rate
+
+reports:
+  daily-water-quality:
+    title: Daily Water Quality Summary
+    cadence: daily
+    format: markdown
+    sections:
+      - current_status
+      - threshold_breaches
+      - actuator_activity
+      - trend_summary
+      - operator_actions
+
+notifications:
+  channels:
+    - local_dashboard
+    - mqtt
+    - webhook
+  escalation:
+    critical_after_minutes: 10
+    repeat_every_minutes: 15
+
+validation:
+  sample_file: samples/sample-readings.json
+  validator: scripts/validate-aquaculture-skill.mjs

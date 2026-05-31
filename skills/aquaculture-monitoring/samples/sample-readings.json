@@ -1,0 +1,29 @@
+[
+  {
+    "timestamp": "2026-05-31T05:55:00Z",
+    "node_id": "pond-a-picoclaw",
+    "dissolved_oxygen_mg_l": 6.4,
+    "ph": 7.4,
+    "water_temperature_c": 24.8,
+    "turbidity_ntu": 22,
+    "feeder_state": "idle"
+  },
+  {
+    "timestamp": "2026-05-31T13:10:00Z",
+    "node_id": "pond-a-picoclaw",
+    "dissolved_oxygen_mg_l": 5.2,
+    "ph": 7.7,
+    "water_temperature_c": 28.4,
+    "turbidity_ntu": 31,
+    "feeder_state": "scheduled"
+  },
+  {
+    "timestamp": "2026-05-31T22:30:00Z",
+    "node_id": "pond-a-picoclaw",
+    "dissolved_oxygen_mg_l": 4.3,
+    "ph": 8.1,
+    "water_temperature_c": 27.9,
+    "turbidity_ntu": 48,
+    "feeder_state": "paused"
+  }
+]
