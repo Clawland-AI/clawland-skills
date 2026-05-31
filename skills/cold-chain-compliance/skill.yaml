@@ -1,0 +1,245 @@
+name: cold-chain-compliance
+version: 1.0.0
+description: Monitor cold-chain temperature, humidity, door, power, and custody signals for audit-ready compliance records.
+agent: picclaw
+category: cold-chain
+
+triggers:
+  - event: sensor.cold_chain.reading
+  - event: logistics.custody_transfer
+  - cron: "*/5 * * * *"
+
+field_mapping:
+  asset_id: asset_id
+  location_id: location_id
+  timestamp: timestamp
+  product_class: product_class
+  temperature_c: temperature_c
+  humidity_percent: humidity_percent
+  door_open: door_open
+  door_open_seconds: door_open_seconds
+  mains_power: mains_power
+  battery_percent: battery_percent
+  sensor_battery_percent: sensor_battery_percent
+  gps_latitude: gps_latitude
+  gps_longitude: gps_longitude
+  custody_actor: custody_actor
+  custody_event: custody_event
+  seal_id: seal_id
+
+profiles:
+  refrigerated:
+    temperature_c:
+      warning_low: 1.0
+      warning_high: 7.0
+      critical_low: 0.0
+      critical_high: 8.0
+  frozen:
+    temperature_c:
+      warning_high: -15.0
+      critical_high: -12.0
+  pharmaceutical_2_8c:
+    temperature_c:
+      warning_low: 2.5
+      warning_high: 7.5
+      critical_low: 2.0
+      critical_high: 8.0
+
+thresholds:
+  humidity_percent:
+    warning_high: 80.0
+    critical_high: 90.0
+  door_open_seconds:
+    warning: 90
+    critical: 300
+  battery_percent:
+    warning_low: 25
+    critical_low: 10
+  sensor_battery_percent:
+    warning_low: 25
+    critical_low: 10
+  sensor_freshness_minutes:
+    warning: 10
+    critical: 30
+  excursion_window_minutes:
+    warning: 15
+    critical: 30
+
+compliance:
+  frameworks:
+    - GSP
+    - HACCP
+    - GDP
+  audit_fields:
+    - asset_id
+    - location_id
+    - product_class
+    - timestamp
+    - temperature_c
+    - humidity_percent
+    - door_open_seconds
+    - mains_power
+    - battery_percent
+    - gps_latitude
+    - gps_longitude
+    - custody_actor
+    - custody_event
+    - seal_id
+    - rule_id
+    - severity
+    - corrective_action
+    - operator_acknowledged_at
+  retention_days: 365
+
+rules:
+  - id: temperature-warning
+    when: temperature_c outside selected_profile.temperature_c.warning range
+    severity: warning
+    message: Cold-chain temperature is outside the warning range for the selected product profile.
+    actions:
+      - log_audit_event
+      - append_excursion_record
+      - send_operator_alert
+
+  - id: temperature-critical
+    when: temperature_c outside selected_profile.temperature_c.critical range
+    severity: critical
+    message: Cold-chain temperature is outside the critical range. Quarantine the load and start corrective action.
+    actions:
+      - log_audit_event
+      - append_excursion_record
+      - send_operator_alert
+      - escalate_to_quality_team
+
+  - id: sustained-temperature-excursion
+    when: excursion_duration_minutes > thresholds.excursion_window_minutes.warning
+    severity: warning
+    message: Temperature excursion has exceeded the configured warning duration.
+    actions:
+      - log_audit_event
+      - append_excursion_record
+      - send_operator_alert
+
+  - id: door-open-critical
+    when: door_open == true and door_open_seconds > thresholds.door_open_seconds.critical
+    severity: critical
+    message: Door has remained open long enough to threaten cold-chain integrity.
+    actions:
+      - log_audit_event
+      - append_excursion_record
+      - send_operator_alert
+      - escalate_to_quality_team
+
+  - id: humidity-critical
+    when: humidity_percent > thresholds.humidity_percent.critical_high
+    severity: critical
+    message: Humidity is above the critical threshold for packaged goods.
+    actions:
+      - log_audit_event
+      - send_operator_alert
+
+  - id: power-loss
+    when: mains_power == false
+    severity: warning
+    message: Mains power is unavailable. Verify backup cooling and battery state.
+    actions:
+      - log_audit_event
+      - send_operator_alert
+
+  - id: low-edge-battery
+    when: battery_percent < thresholds.battery_percent.warning_low
+    severity: warning
+    message: Edge device battery is low and may stop recording compliance data.
+    actions:
+      - log_audit_event
+      - send_operator_alert
+
+  - id: stale-sensor-reading
+    when: minutes_since(timestamp) > thresholds.sensor_freshness_minutes.warning
+    severity: warning
+    message: Cold-chain sensor data is stale.
+    actions:
+      - log_audit_event
+      - send_operator_alert
+
+  - id: custody-transfer
+    when: custody_event in ["handoff", "receiving", "dispatch", "seal_change"]
+    severity: info
+    message: Custody event captured for audit trail.
+    actions:
+      - log_audit_event
+      - append_custody_record
+
+actions:
+  log_audit_event:
+    type: local_log
+    path: /var/log/clawland/cold-chain-compliance.log
+
+  append_excursion_record:
+    type: csv_append
+    path: /var/lib/clawland/cold-chain/excursions.csv
+    columns:
+      - timestamp
+      - asset_id
+      - location_id
+      - product_class
+      - temperature_c
+      - humidity_percent
+      - rule_id
+      - severity
+      - corrective_action
+
+  append_custody_record:
+    type: csv_append
+    path: /var/lib/clawland/cold-chain/custody.csv
+    columns:
+      - timestamp
+      - asset_id
+      - custody_actor
+      - custody_event
+      - seal_id
+      - gps_latitude
+      - gps_longitude
+
+  send_operator_alert:
+    type: notification
+    channels:
+      - telegram
+      - email
+    template: "[{{ severity }}] {{ asset_id }} at {{ location_id }}: {{ message }}"
+
+  escalate_to_quality_team:
+    type: webhook
+    enabled: true
+    endpoint_env: CLAWLAND_QUALITY_WEBHOOK_URL
+
+outputs:
+  metrics:
+    - temperature_c
+    - humidity_percent
+    - door_open_seconds
+    - mains_power
+    - battery_percent
+    - sensor_battery_percent
+    - excursion_duration_minutes
+  reports:
+    daily_csv: /var/lib/clawland/cold-chain/reports/daily-compliance.csv
+    audit_markdown: /var/lib/clawland/cold-chain/reports/audit-report.md
+    pdf_ready_source: /var/lib/clawland/cold-chain/reports/audit-report.md
+  events:
+    - cold_chain.warning
+    - cold_chain.critical
+    - cold_chain.custody
+    - cold_chain.sensor_stale
+
+metadata:
+  domain: cold-chain
+  deployment_targets:
+    - cold-storage-room
+    - refrigerated-truck
+    - freezer-container
+    - receiving-dock
+  notes:
+    - Temperature profiles are defaults and should be tuned for each product class and regulation.
+    - This skill records audit-ready CSV and Markdown outputs; PDF rendering can be handled by the host agent or reporting pipeline.
+    - Automated quarantine actions are intentionally represented as alerts and audit records rather than direct actuator control.
