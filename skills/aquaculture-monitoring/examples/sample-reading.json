@@ -1,0 +1,16 @@
+{
+  "pond_id": "pond-west-01",
+  "timestamp": "2026-05-31T06:00:00Z",
+  "dissolved_oxygen_mg_l": 4.6,
+  "ph": 7.4,
+  "water_temperature_c": 28.2,
+  "ammonia_mg_l": 0.08,
+  "nitrite_mg_l": 0.04,
+  "turbidity_ntu": 18,
+  "salinity_ppt": 0.3,
+  "water_level_cm": 122,
+  "feeding_event": "none",
+  "aerator_state": "scheduled",
+  "sensor_battery_percent": 86,
+  "sensor_age_seconds": 42
+}

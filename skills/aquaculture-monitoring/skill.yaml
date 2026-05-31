@@ -1,0 +1,245 @@
+name: aquaculture-monitoring
+version: 1.0.0
+description: PicClaw skill for pond and tank water-quality monitoring with aerator control, daily reports, and Memory trend learning.
+agent: picclaw
+category: agriculture
+license: MIT
+
+metadata:
+  maintainer: Clawland community
+  bounty_reference: https://clawland.ai/pages/bounty
+  issue: https://github.com/Clawland-AI/clawland-skills/issues/19
+  supported_agents:
+    - picclaw
+    - nanoclaw
+  tags:
+    - aquaculture
+    - dissolved-oxygen
+    - ph
+    - water-temperature
+    - aerator-control
+    - daily-report
+
+triggers:
+  - type: cron
+    schedule: "*/5 * * * *"
+    description: Sample pond sensors every five minutes.
+  - type: event
+    name: sensor.aquaculture.reading
+    description: Evaluate a pushed water-quality reading immediately.
+  - type: manual
+    name: aquaculture.daily_report
+    description: Generate the current daily operating report on demand.
+
+inputs:
+  required:
+    - pond_id
+    - timestamp
+    - dissolved_oxygen_mg_l
+    - ph
+    - water_temperature_c
+  optional:
+    - ammonia_mg_l
+    - nitrite_mg_l
+    - turbidity_ntu
+    - salinity_ppt
+    - water_level_cm
+    - feeding_event
+    - aerator_state
+    - sensor_battery_percent
+    - sensor_age_seconds
+
+thresholds:
+  dissolved_oxygen:
+    unit: mg/L
+    critical_low: 3.0
+    warning_low: 4.0
+    target_min: 5.0
+    target_max: 9.0
+    warning_high: 11.0
+    critical_high: 13.0
+  ph:
+    unit: pH
+    critical_low: 6.0
+    warning_low: 6.5
+    target_min: 6.8
+    target_max: 8.2
+    warning_high: 8.5
+    critical_high: 9.0
+  water_temperature:
+    unit: C
+    critical_low: 14.0
+    warning_low: 18.0
+    target_min: 22.0
+    target_max: 30.0
+    warning_high: 32.0
+    critical_high: 35.0
+  ammonia:
+    unit: mg/L
+    warning_high: 0.25
+    critical_high: 0.5
+  nitrite:
+    unit: mg/L
+    warning_high: 0.2
+    critical_high: 0.5
+  turbidity:
+    unit: NTU
+    warning_high: 50
+    critical_high: 100
+  sensor_health:
+    max_age_seconds: 900
+    min_battery_percent: 20
+
+aerator_control:
+  outputs:
+    primary_relay: relay.aerator.primary
+    backup_relay: relay.aerator.backup
+  modes:
+    normal:
+      condition: dissolved_oxygen_mg_l >= 5.0 and water_temperature_c <= 30.0
+      primary_relay: maintain_schedule
+      backup_relay: off
+    boost:
+      condition: dissolved_oxygen_mg_l < 4.0 or water_temperature_c > 32.0
+      primary_relay: on
+      backup_relay: off
+      min_runtime_minutes: 30
+    emergency:
+      condition: dissolved_oxygen_mg_l < 3.0 or sensor_age_seconds > 900
+      primary_relay: on
+      backup_relay: on
+      min_runtime_minutes: 60
+      notify_immediately: true
+  safeguards:
+    relay_cooldown_minutes: 5
+    require_manual_ack_for_shutdown_after_emergency: true
+    do_not_stop_if_recent_feeding_minutes: 90
+    verify_relay_feedback: true
+
+feeding_guardrails:
+  suspend_feeding_when:
+    - dissolved_oxygen_mg_l < 4.5
+    - water_temperature_c > 32.0
+    - ammonia_mg_l >= 0.25
+    - nitrite_mg_l >= 0.2
+  resume_after_stable_minutes: 120
+  report_feeding_risk: true
+
+actions:
+  on_normal:
+    - type: log
+      level: info
+      message: Water quality is inside target operating range.
+  on_warning:
+    - type: send_alert
+      severity: warning
+      channels:
+        - webhook
+        - telegram
+      message: Aquaculture warning threshold crossed; review aeration and feeding schedule.
+    - type: set_relay
+      target: relay.aerator.primary
+      state: on
+      when: dissolved_oxygen_mg_l < 4.0 or water_temperature_c > 32.0
+  on_critical:
+    - type: send_alert
+      severity: critical
+      channels:
+        - webhook
+        - telegram
+        - sms
+      message: Critical pond condition; start emergency aeration and inspect site.
+    - type: set_relay
+      target: relay.aerator.primary
+      state: on
+    - type: set_relay
+      target: relay.aerator.backup
+      state: on
+    - type: create_incident
+      category: aquaculture-water-quality
+  on_sensor_stale:
+    - type: send_alert
+      severity: warning
+      message: Sensor data is stale; keep aeration conservative until readings recover.
+    - type: set_relay
+      target: relay.aerator.primary
+      state: on
+
+daily_report:
+  enabled: true
+  schedule: "0 6 * * *"
+  timezone: local
+  output_formats:
+    - markdown
+    - json
+  template: templates/daily-report.md
+  include:
+    - min_max_avg_dissolved_oxygen
+    - min_max_avg_ph
+    - min_max_avg_water_temperature
+    - aerator_runtime_minutes
+    - feeding_suspensions
+    - warning_events
+    - critical_events
+    - sensor_health
+    - recommended_actions
+
+memory_learning:
+  enabled: true
+  namespace: aquaculture-monitoring
+  retention_days: 90
+  trend_windows:
+    short_term_hours: 24
+    medium_term_days: 7
+    long_term_days: 30
+  learned_patterns:
+    - key: overnight_do_trough
+      description: Learn the nightly dissolved oxygen low point and alert if it drops faster than the pond baseline.
+      features:
+        - dissolved_oxygen_mg_l
+        - water_temperature_c
+        - aerator_runtime_minutes
+    - key: heat_related_oxygen_drop
+      description: Track oxygen drops correlated with high water temperature.
+      features:
+        - dissolved_oxygen_mg_l
+        - water_temperature_c
+    - key: feeding_water_quality_correlation
+      description: Correlate feeding events with ammonia, nitrite, and oxygen changes.
+      features:
+        - feeding_event
+        - ammonia_mg_l
+        - nitrite_mg_l
+        - dissolved_oxygen_mg_l
+    - key: ph_drift
+      description: Detect slow pH drift before it crosses warning thresholds.
+      features:
+        - ph
+        - alkalinity_note
+    - key: aerator_recovery_time
+      description: Learn how long aeration usually takes to restore safe dissolved oxygen.
+      features:
+        - dissolved_oxygen_mg_l
+        - aerator_state
+        - aerator_runtime_minutes
+  alerts:
+    anomaly_score_warning: 0.70
+    anomaly_score_critical: 0.90
+
+notifications:
+  default_channels:
+    - webhook
+  escalation:
+    warning_after_minutes: 30
+    critical_after_minutes: 5
+    repeat_critical_every_minutes: 15
+
+validation:
+  sample_reading: examples/sample-reading.json
+  validator: tools/validate_aquaculture_skill.py
+  required_sections:
+    - thresholds
+    - aerator_control
+    - daily_report
+    - memory_learning
+    - actions
