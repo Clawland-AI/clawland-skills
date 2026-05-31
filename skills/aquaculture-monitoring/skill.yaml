@@ -1,0 +1,290 @@
+name: aquaculture-monitoring
+version: 1.0.0
+description: Monitor pond water quality, control aeration, and produce operator reports for aquaculture sites.
+category: agriculture
+license: MIT
+
+agents:
+  - picclaw
+  - nanoclaw
+  - microclaw
+
+metadata:
+  maintainer: Clawland community
+  maturity: reference
+  bounty_issue: https://github.com/Clawland-AI/clawland-skills/issues/19
+  use_cases:
+    - fish-pond-monitoring
+    - shrimp-farm-monitoring
+    - recirculating-aquaculture-system
+
+triggers:
+  - event: sensor.dissolved_oxygen
+  - event: sensor.ph
+  - event: sensor.water_temperature
+  - cron: "*/10 * * * *"
+    description: Poll water-quality sensors every 10 minutes.
+  - cron: "0 6 * * *"
+    description: Generate the daily pond health report at 06:00 local time.
+
+sensor_map:
+  dissolved_oxygen:
+    unit: mg_l
+    aliases:
+      - do
+      - oxygen
+      - dissolved_oxygen_mg_l
+    sample_window: 5m
+  ph:
+    unit: ph
+    aliases:
+      - pH
+      - water_ph
+    sample_window: 5m
+  water_temperature:
+    unit: celsius
+    aliases:
+      - temp
+      - water_temp
+      - temperature_c
+    sample_window: 5m
+
+thresholds:
+  dissolved_oxygen:
+    optimal_min: 5.5
+    warning_low: 4.5
+    critical_low: 3.5
+    recovery_target: 5.8
+  ph:
+    optimal_min: 6.8
+    optimal_max: 8.4
+    warning_low: 6.5
+    warning_high: 8.8
+    critical_low: 6.0
+    critical_high: 9.2
+  water_temperature:
+    optimal_min: 20.0
+    optimal_max: 30.0
+    warning_low: 18.0
+    warning_high: 32.0
+    critical_low: 15.0
+    critical_high: 35.0
+
+tools:
+  - read_sensor
+  - write_relay
+  - send_alert
+  - log_data
+  - write_memory
+  - read_memory
+  - render_report
+
+state:
+  memory_namespace: aquaculture.monitoring
+  retained_metrics_days: 30
+  trend_windows:
+    short: 6h
+    daily: 24h
+    weekly: 7d
+
+control_logic:
+  aerator:
+    relay: aerator_main
+    mode: automatic
+    turn_on_when:
+      any:
+        - metric: dissolved_oxygen
+          operator: "<="
+          value_ref: thresholds.dissolved_oxygen.warning_low
+        - all:
+            - metric: water_temperature
+              operator: ">="
+              value_ref: thresholds.water_temperature.warning_high
+            - metric: dissolved_oxygen
+              operator: "<"
+              value_ref: thresholds.dissolved_oxygen.recovery_target
+    turn_off_when:
+      all:
+        - metric: dissolved_oxygen
+          operator: ">="
+          value_ref: thresholds.dissolved_oxygen.recovery_target
+        - metric: water_temperature
+          operator: "<"
+          value_ref: thresholds.water_temperature.warning_high
+    minimum_runtime: 15m
+    cooldown: 10m
+  feeding_guard:
+    suspend_feeding_when:
+      any:
+        - metric: dissolved_oxygen
+          operator: "<"
+          value_ref: thresholds.dissolved_oxygen.warning_low
+        - metric: ph
+          operator: outside
+          min_ref: thresholds.ph.warning_low
+          max_ref: thresholds.ph.warning_high
+        - metric: water_temperature
+          operator: outside
+          min_ref: thresholds.water_temperature.warning_low
+          max_ref: thresholds.water_temperature.warning_high
+    resume_when_stable_for: 2h
+
+rules:
+  - id: low-dissolved-oxygen-warning
+    severity: warning
+    when:
+      metric: dissolved_oxygen
+      operator: "<="
+      value_ref: thresholds.dissolved_oxygen.warning_low
+    actions:
+      - write_relay:
+          relay_ref: control_logic.aerator.relay
+          state: on
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "Dissolved oxygen is below warning level. Aerator enabled."
+      - write_memory:
+          key: low_do_events
+          append: true
+  - id: low-dissolved-oxygen-critical
+    severity: critical
+    when:
+      metric: dissolved_oxygen
+      operator: "<="
+      value_ref: thresholds.dissolved_oxygen.critical_low
+    actions:
+      - write_relay:
+          relay_ref: control_logic.aerator.relay
+          state: on
+      - send_alert:
+          channels:
+            - telegram
+            - discord
+            - webhook
+          priority: urgent
+          message: "Critical dissolved oxygen level. Immediate pond inspection required."
+      - write_memory:
+          key: critical_incidents
+          append: true
+  - id: ph-out-of-range
+    severity: warning
+    when:
+      metric: ph
+      operator: outside
+      min_ref: thresholds.ph.warning_low
+      max_ref: thresholds.ph.warning_high
+    actions:
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "pH is outside the safe operating band. Check alkalinity and recent water changes."
+      - write_memory:
+          key: ph_excursions
+          append: true
+  - id: temperature-stress
+    severity: warning
+    when:
+      metric: water_temperature
+      operator: outside
+      min_ref: thresholds.water_temperature.warning_low
+      max_ref: thresholds.water_temperature.warning_high
+    actions:
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "Water temperature is outside the preferred band. Monitor oxygen demand and feeding."
+      - write_memory:
+          key: temperature_stress_events
+          append: true
+
+trend_learning:
+  enabled: true
+  memory_keys:
+    - dissolved_oxygen_baseline
+    - ph_baseline
+    - temperature_baseline
+    - aerator_runtime_daily
+    - alert_frequency_daily
+  observations:
+    - metric: dissolved_oxygen
+      aggregate: min
+      window: daily
+    - metric: dissolved_oxygen
+      aggregate: slope
+      window: short
+    - metric: ph
+      aggregate: average
+      window: daily
+    - metric: water_temperature
+      aggregate: max
+      window: daily
+  insights:
+    - id: oxygen-night-drop
+      condition: "daily dissolved oxygen minimum repeatedly occurs before sunrise"
+      recommendation: "Increase overnight aeration schedule or reduce late-day feeding."
+    - id: ph-drift
+      condition: "daily pH average drifts by more than 0.3 for three consecutive days"
+      recommendation: "Inspect alkalinity, water exchange history, and photosynthetic load."
+    - id: heat-oxygen-coupling
+      condition: "high temperature correlates with low dissolved oxygen"
+      recommendation: "Preemptively run aerator during hot afternoons."
+
+reports:
+  daily:
+    schedule_ref: triggers[4]
+    template: daily-pond-health
+    include:
+      - min_dissolved_oxygen
+      - average_ph
+      - max_water_temperature
+      - aerator_runtime
+      - alerts_by_severity
+      - trend_learning_insights
+      - recommended_operator_actions
+    actions:
+      - render_report:
+          format:
+            - markdown
+            - json
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "Daily aquaculture monitoring report is ready."
+    files:
+      markdown_template: reports/daily-pond-health.md
+
+examples:
+  sample_readings: examples/sample-readings.jsonl
+
+notifications:
+  telegram:
+    enabled: true
+    token_env: TELEGRAM_BOT_TOKEN
+    chat_id_env: TELEGRAM_CHAT_ID
+  discord:
+    enabled: true
+    webhook_env: DISCORD_WEBHOOK_URL
+  webhook:
+    enabled: true
+    url_env: AQUACULTURE_WEBHOOK_URL
+
+safety:
+  fail_closed_relays:
+    - aerator_main
+  require_manual_ack_for:
+    - low-dissolved-oxygen-critical
+  max_alerts_per_hour: 12
+  sensor_stale_after: 20m
+  on_sensor_stale:
+    severity: warning
+    actions:
+      - send_alert:
+          channels:
+            - telegram
+            - webhook
+          message: "Aquaculture sensor data is stale. Check probe power, calibration, and network link."
