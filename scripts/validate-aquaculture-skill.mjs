@@ -3,8 +3,10 @@ import fs from "node:fs";
 const manifestPath = "skills/aquaculture-monitoring/skill.yaml";
 const readmePath = "skills/aquaculture-monitoring/README.md";
 const samplePath = "skills/aquaculture-monitoring/samples/sample-readings.json";
+const reportTemplatePath = "skills/aquaculture-monitoring/reports/daily-water-quality-template.md";
+const aerationPlaybookPath = "skills/aquaculture-monitoring/playbooks/aeration-response.md";
 
-for (const path of [manifestPath, readmePath, samplePath]) {
+for (const path of [manifestPath, readmePath, samplePath, reportTemplatePath, aerationPlaybookPath]) {
   if (!fs.existsSync(path)) {
     throw new Error(`Missing required file: ${path}`);
   }
@@ -13,6 +15,8 @@ for (const path of [manifestPath, readmePath, samplePath]) {
 const manifest = fs.readFileSync(manifestPath, "utf8");
 const readme = fs.readFileSync(readmePath, "utf8");
 const samples = JSON.parse(fs.readFileSync(samplePath, "utf8"));
+const reportTemplate = fs.readFileSync(reportTemplatePath, "utf8");
+const aerationPlaybook = fs.readFileSync(aerationPlaybookPath, "utf8");
 
 const requiredManifestTerms = [
   "name: aquaculture-monitoring",
@@ -28,6 +32,8 @@ const requiredManifestTerms = [
   "daily-report",
   "trend_learning:",
   "daily-water-quality",
+  "template_path: reports/daily-water-quality-template.md",
+  "aeration_response: playbooks/aeration-response.md",
 ];
 
 for (const term of requiredManifestTerms) {
@@ -42,6 +48,12 @@ for (const term of ["Sensor Mapping", "Control Logic", "Memory Trend Learning", 
   }
 }
 
+for (const term of ["reports/daily-water-quality-template.md", "playbooks/aeration-response.md"]) {
+  if (!readme.includes(term)) {
+    throw new Error(`README missing artifact reference: ${term}`);
+  }
+}
+
 if (!Array.isArray(samples) || samples.length < 3) {
   throw new Error("Sample readings must include at least three entries");
 }
@@ -51,6 +63,23 @@ for (const sample of samples) {
     if (!(key in sample)) {
       throw new Error(`Sample reading missing key: ${key}`);
     }
+  }
+}
+
+for (const placeholder of [
+  "{{do_min}}",
+  "{{do_breach_count}}",
+  "{{aerator_runtime_minutes}}",
+  "{{trend_summary}}",
+]) {
+  if (!reportTemplate.includes(placeholder)) {
+    throw new Error(`Report template missing placeholder: ${placeholder}`);
+  }
+}
+
+for (const phrase of ["Warning Band", "Critical Band", "aerator_relay", "feeder_relay"]) {
+  if (!aerationPlaybook.includes(phrase)) {
+    throw new Error(`Aeration playbook missing phrase: ${phrase}`);
   }
 }
 

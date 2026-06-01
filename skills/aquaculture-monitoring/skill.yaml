@@ -116,6 +116,7 @@ rules:
     actions:
       - generate_report:
           template: daily-water-quality
+          template_path: reports/daily-water-quality-template.md
           include:
             - dissolved_oxygen_mg_l
             - ph
@@ -151,12 +152,16 @@ reports:
     title: Daily Water Quality Summary
     cadence: daily
     format: markdown
+    template_path: reports/daily-water-quality-template.md
     sections:
       - current_status
       - threshold_breaches
       - actuator_activity
       - trend_summary
       - operator_actions
+
+playbooks:
+  aeration_response: playbooks/aeration-response.md
 
 notifications:
   channels:
@@ -169,4 +174,6 @@ notifications:
 
 validation:
   sample_file: samples/sample-readings.json
+  report_template: reports/daily-water-quality-template.md
+  aeration_playbook: playbooks/aeration-response.md
   validator: scripts/validate-aquaculture-skill.mjs

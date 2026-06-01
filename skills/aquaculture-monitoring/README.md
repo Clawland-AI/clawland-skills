@@ -27,6 +27,8 @@ The manifest uses logical sensor names so deployments can map them to local driv
 - Low oxygen during warm water conditions starts aeration before the critical band.
 - Feeding is paused when oxygen, pH, or turbidity is outside safe ranges.
 - A daily report summarizes water-quality state, threshold breaches, actuator activity, and operator actions.
+- The daily report template lives at `reports/daily-water-quality-template.md`.
+- The field response checklist lives at `playbooks/aeration-response.md`.
 
 ## Memory Trend Learning
 
