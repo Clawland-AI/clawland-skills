@@ -1,0 +1,281 @@
+name: cold-chain-compliance
+version: 1.0.0
+description: GSP and HACCP-oriented cold chain monitoring, escalation, audit logging, and report generation for Clawland edge agents.
+agent: picclaw
+category: monitoring
+tags:
+  - cold-chain
+  - compliance
+  - gsp
+  - haccp
+  - logistics
+  - audit
+
+triggers:
+  - cron: "*/5 * * * *"
+    description: Poll primary temperature, humidity, door, and power sensors every 5 minutes.
+  - event: "sensor.temperature"
+    description: Evaluate each temperature reading as it arrives.
+  - event: "sensor.humidity"
+    description: Evaluate condensation and packaging-risk humidity readings.
+  - event: "sensor.door"
+    description: Capture door-open duration and chain-of-custody events.
+  - event: "shipment.checkpoint"
+    description: Generate receiving, loading, handoff, and delivery compliance entries.
+
+tools:
+  - read_sensor
+  - send_alert
+  - log_data
+  - append_file
+  - report_gene
+  - message
+
+sensor_map:
+  temperature_c:
+    required: true
+    aliases:
+      - temp_c
+      - cargo_temperature_c
+      - probe_temperature_c
+    unit: celsius
+  humidity_percent:
+    required: false
+    aliases:
+      - rh
+      - relative_humidity
+    unit: percent
+  door_open:
+    required: false
+    aliases:
+      - door_contact
+      - cargo_door_open
+    unit: boolean
+  power_ok:
+    required: false
+    aliases:
+      - mains_power
+      - fridge_power_ok
+    unit: boolean
+  gps_location:
+    required: false
+    aliases:
+      - location
+      - lat_lon
+    unit: text
+
+profiles:
+  chilled_food:
+    description: Typical chilled food transport and storage.
+    temperature_c:
+      target_min: 0.0
+      target_max: 5.0
+      warning_min: -1.0
+      warning_max: 6.0
+      critical_min: -2.0
+      critical_max: 8.0
+      max_excursion_minutes: 20
+    humidity_percent:
+      warning_max: 85
+      critical_max: 92
+  frozen_food:
+    description: Frozen storage where thaw risk must be escalated quickly.
+    temperature_c:
+      target_max: -18.0
+      warning_max: -15.0
+      critical_max: -12.0
+      max_excursion_minutes: 10
+    humidity_percent:
+      warning_max: 80
+      critical_max: 90
+  pharmaceuticals_2_8c:
+    description: Common GDP/GSP pharmaceutical cold-chain profile.
+    temperature_c:
+      target_min: 2.0
+      target_max: 8.0
+      warning_min: 1.5
+      warning_max: 8.5
+      critical_min: 1.0
+      critical_max: 9.0
+      max_excursion_minutes: 5
+    humidity_percent:
+      warning_max: 75
+      critical_max: 85
+
+default_profile: chilled_food
+
+compliance:
+  frameworks:
+    - GSP
+    - HACCP
+  haccp_control_points:
+    - id: receiving_temperature_check
+      description: Confirm cargo is within profile range before acceptance.
+      evidence_required:
+        - sensor_id
+        - calibrated_at
+        - operator_id
+        - shipment_id
+        - temperature_c
+        - timestamp
+    - id: storage_temperature_control
+      description: Monitor ongoing storage temperature and humidity.
+      evidence_required:
+        - min_temperature_c
+        - max_temperature_c
+        - excursion_minutes
+        - corrective_actions
+    - id: dispatch_handoff
+      description: Record chain-of-custody handoff and seal state.
+      evidence_required:
+        - handoff_from
+        - handoff_to
+        - seal_id
+        - gps_location
+        - signature_reference
+
+logic:
+  warning:
+    when:
+      any:
+        - temperature_c outside profile.temperature_c.warning_min_warning_max
+        - humidity_percent above profile.humidity_percent.warning_max
+        - door_open longer_than_seconds 120
+    actions:
+      - log_data: compliance_event
+      - send_alert: operator_warning
+      - message: "Cold-chain warning: check cargo conditions and confirm corrective action."
+  critical:
+    when:
+      any:
+        - temperature_c outside profile.temperature_c.critical_min_critical_max
+        - temperature_excursion longer_than profile.temperature_c.max_excursion_minutes
+        - humidity_percent above profile.humidity_percent.critical_max
+        - power_ok equals false
+    actions:
+      - log_data: critical_excursion
+      - send_alert: operator_and_manager_critical
+      - message: "Critical cold-chain excursion: quarantine affected lot until QA review."
+      - report_gene: cold_chain_excursion_response
+  recovery:
+    when:
+      all:
+        - previous_state equals warning_or_critical
+        - temperature_c inside profile.temperature_c.target_min_target_max
+        - stable_for_minutes at_least 15
+    actions:
+      - log_data: recovery_event
+      - message: "Cold-chain readings recovered; keep monitoring until QA releases the lot."
+
+audit_trail:
+  storage_path: memory/cold-chain/audit-log.jsonl
+  sample_chain: samples/audit-log.jsonl
+  hash_algorithm: sha256
+  tamper_evidence:
+    include_previous_hash: true
+    include_entry_hash: true
+    rotate_daily: true
+  required_fields:
+    - entry_id
+    - previous_hash
+    - entry_hash
+    - timestamp
+    - node_id
+    - shipment_id
+    - lot_id
+    - sensor_id
+    - profile
+    - event_type
+    - severity
+    - temperature_c
+    - humidity_percent
+    - door_open
+    - power_ok
+    - gps_location
+    - operator_id
+    - corrective_action
+    - qa_release_required
+
+reports:
+  daily_summary:
+    cron: "0 23 * * *"
+    template_path: reports/daily-summary-template.md
+    output_formats:
+      - csv
+      - pdf-ready-markdown
+    storage_path: memory/cold-chain/reports/
+    include:
+      - shipment_id
+      - lot_id
+      - profile
+      - min_temperature_c
+      - max_temperature_c
+      - average_temperature_c
+      - max_humidity_percent
+      - total_excursion_minutes
+      - door_open_events
+      - power_loss_events
+      - corrective_actions
+      - unresolved_events
+      - qa_release_required
+  excursion_report:
+    template_path: reports/excursion-report-template.md
+    output_formats:
+      - csv
+      - pdf-ready-markdown
+    include:
+      - event_id
+      - start_time
+      - end_time
+      - duration_minutes
+      - peak_temperature_c
+      - root_cause
+      - corrective_action
+      - disposition
+      - approver
+
+memory:
+  trend_learning:
+    enabled: true
+    namespace: cold-chain
+    learn_from:
+      - recurring_temperature_excursions
+      - door_open_patterns
+      - route_or_location_hotspots
+      - power_loss_patterns
+      - corrective_action_effectiveness
+    summarize_daily: true
+    retain_days: 180
+  gene_reporting:
+    enabled: true
+    min_confidence: 0.75
+    report_when:
+      - repeated_excursion_pattern_detected
+      - corrective_action_successful_twice
+      - new_sensor_failure_mode
+
+notifications:
+  operator_warning:
+    channels:
+      - telegram
+      - discord
+    throttle_minutes: 10
+  operator_and_manager_critical:
+    channels:
+      - telegram
+      - discord
+      - feishu
+    repeat_until_acknowledged: true
+    escalation_minutes: 15
+
+validation:
+  sample_data: samples/sample-readings.json
+  sample_audit_chain: samples/audit-log.jsonl
+  report_templates:
+    - reports/daily-summary-template.md
+    - reports/excursion-report-template.md
+  expected_behaviors:
+    - chilled_food warning when temperature_c is 6.4
+    - chilled_food critical when temperature_c is 8.7
+    - pharmaceuticals_2_8c critical when excursion lasts more than 5 minutes
+    - audit entries include previous_hash and entry_hash
