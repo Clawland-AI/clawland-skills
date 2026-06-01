@@ -9,6 +9,8 @@
 - Door-open, power-loss, receiving, dispatch, handoff, and delivery checkpoint events.
 - Tamper-evident JSONL audit trail fields with previous-hash and entry-hash support.
 - Daily summary and excursion report templates that can be rendered to CSV or PDF-ready Markdown.
+- Reviewable Markdown report templates in `reports/daily-summary-template.md` and `reports/excursion-report-template.md`.
+- Tamper-evident sample audit events in `samples/audit-log.jsonl`.
 - Memory-based trend learning for recurring excursions, route hotspots, door-open patterns, and corrective action quality.
 
 ## Sensor Mapping
@@ -43,6 +45,8 @@ memory/cold-chain/audit-log.jsonl
 
 Each entry should include `previous_hash` and `entry_hash` so the fleet manager or QA reviewer can detect tampering. Required fields are listed in `skill.yaml` under `audit_trail.required_fields`.
 
+The sample audit chain in `samples/audit-log.jsonl` shows the expected previous-hash linkage from a normal reading to a warning and then a critical excursion. It is sample evidence for validator/reviewer inspection, not a production secret or live shipment record.
+
 ## Reports
 
 The skill defines two report shapes:
@@ -51,6 +55,8 @@ The skill defines two report shapes:
 - `excursion_report`: one report per excursion, including start/end time, duration, root cause, corrective action, disposition, and approver.
 
 Both are marked as `csv` and `pdf-ready-markdown` outputs so a PicClaw node can write structured CSV data for audit systems while also producing a human-readable Markdown document that can be rendered to PDF.
+
+Markdown report skeletons are included under `reports/` so reviewers can inspect the exact compliance fields that would be rendered for daily release checks and individual excursions.
 
 ## Sample Validation
 

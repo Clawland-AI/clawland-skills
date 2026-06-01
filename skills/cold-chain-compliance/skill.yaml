@@ -169,6 +169,7 @@ logic:
 
 audit_trail:
   storage_path: memory/cold-chain/audit-log.jsonl
+  sample_chain: samples/audit-log.jsonl
   hash_algorithm: sha256
   tamper_evidence:
     include_previous_hash: true
@@ -198,6 +199,7 @@ audit_trail:
 reports:
   daily_summary:
     cron: "0 23 * * *"
+    template_path: reports/daily-summary-template.md
     output_formats:
       - csv
       - pdf-ready-markdown
@@ -217,6 +219,7 @@ reports:
       - unresolved_events
       - qa_release_required
   excursion_report:
+    template_path: reports/excursion-report-template.md
     output_formats:
       - csv
       - pdf-ready-markdown
@@ -267,6 +270,10 @@ notifications:
 
 validation:
   sample_data: samples/sample-readings.json
+  sample_audit_chain: samples/audit-log.jsonl
+  report_templates:
+    - reports/daily-summary-template.md
+    - reports/excursion-report-template.md
   expected_behaviors:
     - chilled_food warning when temperature_c is 6.4
     - chilled_food critical when temperature_c is 8.7
