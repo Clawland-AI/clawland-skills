@@ -1,0 +1,56 @@
+name: temperature-alert
+version: 0.1.0
+description: Monitor temperature sensor readings and alert when high, low, or rapid-change thresholds are crossed.
+agent: any
+category: monitoring
+
+triggers:
+  - event: sensor.temperature
+  - cron: "*/5 * * * *"
+
+inputs:
+  - name: sensor_id
+    type: string
+    required: true
+  - name: temperature_c
+    type: number
+    required: true
+  - name: timestamp
+    type: string
+    required: false
+
+thresholds:
+  high_warning_c: 35.0
+  high_critical_c: 45.0
+  low_warning_c: 5.0
+  low_critical_c: 0.0
+  rate_of_change_c_per_min: 5.0
+
+actions:
+  on_normal:
+    - log
+  on_warning:
+    - log
+    - webhook
+    - discord
+  on_critical:
+    - log
+    - webhook
+    - discord
+    - telegram
+
+tools:
+  - read_sensor
+  - send_alert
+  - log_data
+
+compatibility:
+  picclaw: true
+  nanoclaw: true
+  microclaw: true
+  moltclaw: true
+
+files:
+  runtime: scripts/temperature_alert.py
+  example_config: config.example.yaml
+  example_event: examples/sensor-event.json
