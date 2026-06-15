@@ -1,0 +1,12 @@
+thresholds:
+  high_warning_c: 35.0
+  high_critical_c: 45.0
+  low_warning_c: 5.0
+  low_critical_c: 0.0
+  rate_of_change_c_per_min: 5.0
+
+notifications:
+  webhook_url: ""
+  discord_webhook_url: ""
+  telegram_bot_token: ""
+  telegram_chat_id: ""
