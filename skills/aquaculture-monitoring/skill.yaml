@@ -1,0 +1,117 @@
+name: aquaculture-monitoring
+version: 1.0.0
+description: >-
+  Observe pond water quality, detect dissolved-oxygen, pH and temperature hazards,
+  recommend fail-safe aeration, flag unsafe feeding, publish daily reports and
+  retain bounded trend memory. All actuator suggestions require an external
+  trusted controller; this skill never directly energizes hardware.
+agent: picclaw
+license: MIT
+triggers:
+  - cron: "*/5 * * * *"
+  - event: "sensor.aquaculture.reading"
+tools:
+  - read_sensor
+  - log_data
+  - send_alert
+  - read_memory
+  - write_memory
+  - report_gene
+sensor_mapping:
+  pond_id: pond_id
+  timestamp: observed_at
+  dissolved_oxygen: do_mg_l
+  ph: ph
+  temperature: temperature_c
+  aerator_state: aerator_on
+  feeding_state: feeding_active
+  units:
+    dissolved_oxygen: mg/L
+    ph: pH
+    temperature: degC
+sensor_health:
+  maximum_age_seconds: 600
+  reject_future_skew_seconds: 120
+  reject_non_finite: true
+  valid_ranges:
+    dissolved_oxygen: {minimum: 0.0, maximum: 25.0}
+    ph: {minimum: 0.0, maximum: 14.0}
+    temperature: {minimum: -2.0, maximum: 50.0}
+  stale_policy:
+    notify_operator: true
+    aerator: hold_on_or_recommend_on
+    feeding: suspend_recommendation
+thresholds:
+  dissolved_oxygen:
+    critical_low: 3.0
+    warning_low: 5.0
+    recovery_high: 6.0
+  ph:
+    critical_low: 6.0
+    warning_low: 6.5
+    warning_high: 8.5
+    critical_high: 9.0
+  temperature:
+    critical_low: 14.0
+    warning_low: 18.0
+    warning_high: 30.0
+    critical_high: 35.0
+aerator_control:
+  mode: recommend_only
+  minimum_on_seconds: 900
+  minimum_off_seconds: 300
+  hysteresis:
+    turn_on_below_do_mg_l: 5.0
+    eligible_to_turn_off_above_do_mg_l: 6.0
+  critical_low_do_override_minimum_off: true
+  do_not_recommend_off_when:
+    - oxygen_warning_or_critical
+    - readings_invalid_or_stale
+    - operator_override_active
+    - another_water_quality_critical_alert
+  control_guardrails:
+    fail_safe_when_unknown: on
+    require_relay_feedback_before_reporting_success: true
+    require_operator_approval_for_real_hardware: true
+feeding_guardrails:
+  recommend_pause_when:
+    - oxygen_warning_or_critical
+    - ph_critical
+    - temperature_critical
+    - readings_invalid_or_stale
+  resume_only_after_clear_reading: true
+alerts:
+  on_warning: "Notify pond operator and log condition"
+  on_critical: "Urgent operator notification, recommend aeration and pause feeding"
+  on_invalid_reading: "Alert stale or invalid sensor; do not recommend switching aerator off"
+  deduplicate_seconds: 900
+daily_report:
+  schedule: "0 7 * * *"
+  timezone: UTC
+  output_format: markdown
+  include:
+    - per_sensor_min_mean_max
+    - threshold_excursions
+    - critical_and_warning_events
+    - aerator_recommendations
+    - feeding_restrictions
+    - sensor_quality
+    - trend_observations
+memory_learning:
+  enabled: true
+  rolling_window_days: 7
+  maximum_samples_per_sensor: 2016
+  sample_interval_seconds: 300
+  trend_detection:
+    early_morning_do_trough: true
+    do_declining_delta_mg_l_per_hour: -0.8
+    temperature_rising_delta_c_per_hour: 1.5
+    ph_drift_delta_per_day: 0.4
+  retention_days: 30
+  autonomous_threshold_relaxation: false
+  do_not_store_personal_data: true
+actions:
+  on_warning: "Record warning; notify operator; inspect current aeration and feed state"
+  on_critical: "Record critical; notify urgently; recommend aerator ON and feeding PAUSE"
+  on_recovery: "Log recovery; retain aeration until recovery threshold and minimum-on guard pass"
+  on_sensor_failure: "Flag measurement invalid; keep/recommend aerator ON; pause feeding"
