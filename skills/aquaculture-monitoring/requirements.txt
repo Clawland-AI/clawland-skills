@@ -1,0 +1,2 @@
+# Optional offline evaluator dependency (not required for the declarative YAML skill).
+PyYAML>=6.0,<7
