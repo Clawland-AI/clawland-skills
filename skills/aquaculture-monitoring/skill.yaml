@@ -70,7 +70,7 @@ aerator_control:
     - operator_override_active
     - another_water_quality_critical_alert
   control_guardrails:
-    fail_safe_when_unknown: on
+    fail_safe_when_unknown: "on"
     require_relay_feedback_before_reporting_success: true
     require_operator_approval_for_real_hardware: true
 feeding_guardrails:
