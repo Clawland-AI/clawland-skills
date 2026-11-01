@@ -8,9 +8,9 @@ A sensor event has `pond_id`, `observed_at` (UTC timestamp), `do_mg_l` (mg/L), `
 
 ## Safety thresholds
 
-Dissolved oxygen: &lt;3.0 critical, &lt;5.0 warning, &gt;6.0 recovery; pH: below 6.0 or above 9.0 critical, outside 6.5–8.5 warning; temperature: below 14 or above 35 °C critical, outside 18–30 °C warning. Values are example defaults requiring aquaculture-specific configuration.
+Dissolved oxygen: <3.0 critical, <5.0 warning, >6.0 recovery; pH: below 6.0 or above 9.0 critical, outside 6.5–8.5 warning; temperature: below 14 or above 35 °C critical, outside 18–30 °C warning. Values are example defaults requiring aquaculture-specific configuration.
 
-Stale (&gt;10 min) or invalid sensor data produces alerts and an aerator-on/feeding-pause recommendation rather than switching off equipment. Aeration uses hysteresis and minimum on/off periods, and never overrides the operator's direct command. Feeding pauses during oxygen danger and other critical water-quality conditions.
+Stale (>10 min) or invalid sensor data produces alerts and an aerator-on/feeding-pause recommendation rather than switching off equipment. Aeration uses hysteresis and minimum on/off periods, and never overrides the operator's direct command. Feeding pauses during oxygen danger and other critical water-quality conditions.
 
 ## Daily reports and memory
 
@@ -18,7 +18,17 @@ The YAML declares UTC 07:00 daily Markdown reports of minimum/mean/maximum value
 
 ## Testing and limitations
 
-This package was independently developed with a separate Python offline evaluator and 17 local automated tests in the source submission ZIP. Those reference scripts and synthetic sample readings must be included before claiming a complete validated submission. The project's skill YAML schema is pre-alpha, and maintainers must confirm runtime compatibility. No real sensor or relay hardware was tested.
+This package contains a Python offline reference evaluator (`scripts/aquaculture.py`), synthetic readings in `examples/`, and automated unit tests in `tests/`.
+
+From the repository root, install `PyYAML` and run:
+
+```bash
+python -m pip install -r skills/aquaculture-monitoring/requirements.txt
+python -m unittest discover -s skills/aquaculture-monitoring/tests -v
+python skills/aquaculture-monitoring/scripts/aquaculture.py --readings skills/aquaculture-monitoring/examples/sensor-readings.json --at 2026-11-01T05:00:00Z --report
+```
+
+The local test suite previously passed 22 unit tests; results are from synthetic data, not physical hardware. Clawland's skill schema is pre-alpha and maintainer review is required for runtime compatibility. No real sensors or actuator relays were tested.
 
 ## Reward
 
